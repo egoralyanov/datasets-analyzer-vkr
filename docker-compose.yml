@@ -1,0 +1,58 @@
+# docker-compose.yml — оркестрация трёх сервисов проекта «Анализатор».
+# Архитектура: Nginx (frontend, :3000) → FastAPI (backend, :8000) → PostgreSQL (:5432).
+# Версия Compose v2: ключ `version` намеренно опущен (deprecated в современных версиях).
+
+services:
+  postgres:
+    # Образ pgvector/pgvector:pg15 = PostgreSQL 15 с предустановленным расширением pgvector.
+    image: pgvector/pgvector:pg15
+    container_name: analyzer-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Порт наружу не пробрасываем — БД доступна только из docker-сети.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: analyzer-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Локальные пользовательские датасеты и сгенерированные отчёты.
+      - ./data/datasets:/data/datasets
+      - ./data/reports:/data/reports
+    # Порт 8000 наружу не пробрасываем — фронт ходит через nginx-прокси по docker-сети.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # urllib доступен в любой сборке python:3.11-slim, не требует доустановки curl.
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: analyzer-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
