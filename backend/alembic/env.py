@@ -14,8 +14,7 @@ from app.config import settings
 from app.core.db import Base
 
 # Импорт моделей нужен, чтобы Base.metadata знал обо всех таблицах при autogenerate.
-# В Спринте 0 моделей ещё нет — импорт активируется в Спринте 1.
-# import app.models  # noqa: F401
+import app.models  # noqa: F401
 
 config = context.config
 
