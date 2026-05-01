@@ -1,3 +1,5 @@
+import { ServerStatus } from "./components/ServerStatus";
+
 export default function App() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -7,6 +9,9 @@ export default function App() {
           Интеллектуальная система анализа наборов данных для решения задач
           машинного обучения
         </p>
+      </div>
+      <div className="fixed bottom-4 right-4">
+        <ServerStatus />
       </div>
     </div>
   );
