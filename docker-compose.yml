@@ -28,9 +28,14 @@ services:
     env_file:
       - .env
     volumes:
-      # Локальные пользовательские датасеты и сгенерированные отчёты.
-      - ./data/datasets:/data/datasets
-      - ./data/reports:/data/reports
+      # Bind-mount для hot-reload при локальной разработке: изменения в backend/
+      # сразу подхватываются uvicorn --reload без ребилда образа. На проде/CI
+      # эти строки не используются — образ запускается без volumes (см. CMD в Dockerfile).
+      - ./backend:/app
+      # Пользовательские датасеты и сгенерированные отчёты.
+      - ./data:/data
+    # Переопределяем CMD из Dockerfile, чтобы включить --reload для разработки.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     # Порт 8000 наружу не пробрасываем — фронт ходит через nginx-прокси по docker-сети.
     depends_on:
       postgres:
