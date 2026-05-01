@@ -1,0 +1,89 @@
+# --- Локальная база знаний и инструкции для AI-ассистента (не публикуем) ---
+.knowledge/
+CLAUDE.md
+HELLO.md
+
+# --- Планы разработки (локально, не публикуем) ---
+plans/
+
+# --- Локальные данные ---
+data/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Виртуальные окружения
+.venv/
+venv/
+env/
+ENV/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# mypy / ruff / type checkers
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+.vite/
+.cache/
+*.local
+
+# Логи
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Секреты / окружение ---
+.env
+.env.*
+!.env.example
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Локальный тулинг ---
+.claude/
+
+# --- Прочее ---
+*.log
+tmp/
+temp/
