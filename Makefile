@@ -1,7 +1,7 @@
 # Makefile для проекта «Анализатор»
 # Все команды разработки идут через docker compose v2.
 
-.PHONY: up down logs migrate seed test clean
+.PHONY: up down logs migrate migrate-create seed test clean
 
 # Поднять все контейнеры (postgres, backend, frontend) в фоне
 up:
@@ -18,6 +18,10 @@ logs:
 # Применить миграции БД
 migrate:
 	docker compose exec backend alembic upgrade head
+
+# Сгенерировать новую миграцию по изменениям в моделях. Использование: make migrate-create name=add_users_table
+migrate-create:
+	docker compose exec backend alembic revision --autogenerate -m "$(name)"
 
 # Загрузка справочников (заглушка для Спринта 0, реальная реализация в Спринте 2+)
 seed:
