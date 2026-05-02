@@ -28,6 +28,11 @@ async def lifespan(app: FastAPI):
             logger.warning(
                 "Reset %s stuck running analyses to failed at startup", recovered
             )
+    except Exception as exc:
+        # На свежей БД (до первого `make migrate`) таблицы analyses ещё нет.
+        # Это нормальный кейс — startup не должен падать на пустом стенде.
+        logger.warning("Skipped recovery on startup: %s", exc)
+        db.rollback()
     finally:
         db.close()
     yield

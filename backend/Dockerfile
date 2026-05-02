@@ -12,9 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Копируем манифест и пакет приложения (setuptools требует наличие пакета на момент install).
+# Копируем манифест и все пакеты приложения. setuptools на момент editable install
+# должен видеть и app, и seeds — иначе модули не попадут в site-packages.
 COPY pyproject.toml ./
 COPY app ./app
+COPY seeds ./seeds
 
 # Устанавливаем зависимости вместе с dev-инструментами (pytest, httpx — нужны для make test).
 # Editable-install (-e): site-packages указывает на /app, поэтому при bind-mount
@@ -28,9 +30,6 @@ COPY alembic ./alembic
 
 # Тесты — нужны для `make test` (docker compose exec backend pytest).
 COPY tests ./tests
-
-# Сид-скрипты для справочников (quality_rules и т.п.).
-COPY seeds ./seeds
 
 EXPOSE 8000
 
