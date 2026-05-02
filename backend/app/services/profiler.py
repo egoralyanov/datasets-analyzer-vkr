@@ -167,6 +167,10 @@ def is_normal_shapiro(
     """
     if values.size < 3:
         return False, None
+    # На константе тест неприменим (range zero) — scipy печатает warning,
+    # а математический смысл нормальности отсутствует. Сразу не нормально.
+    if values.std(ddof=0) == 0:
+        return False, None
     # Для больших выборок берём случайный сэмпл фиксированного размера —
     # сам тест Шапиро-Уилка определён только до n=5000.
     if values.size > SHAPIRO_MAX_N:
