@@ -1,21 +1,23 @@
 """
 Зависимости FastAPI: сессия БД и текущий пользователь из JWT.
 
-`oauth2_scheme` указывает Swagger UI, что для авторизации нужен Bearer-токен,
-получаемый через POST /api/auth/login (это даёт кнопку "Authorize" в /api/docs).
+Используем HTTPBearer (не OAuth2PasswordBearer), потому что наш /api/auth/login
+принимает JSON {"username_or_email", "password"}, а не form-data, ожидаемое
+OAuth2 password flow. HTTPBearer даёт в Swagger простое поле для вставки
+готового токена и не пытается логинить за пользователя.
 """
 import uuid
 from collections.abc import Generator
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.core.security import decode_access_token
 from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=True)
+bearer_scheme = HTTPBearer(auto_error=True)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -27,10 +29,10 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    payload = decode_access_token(token)
+    payload = decode_access_token(credentials.credentials)
     user_id_str = payload.get("sub")
     if not user_id_str:
         raise HTTPException(
