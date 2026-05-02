@@ -1,18 +1,31 @@
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Header } from "./components/layout/Header";
 import { ServerStatus } from "./components/ServerStatus";
+import { RequireAuth } from "./components/layout/RequireAuth";
+import { Landing } from "./pages/Landing";
+import { Login } from "./pages/Login";
+import { Register } from "./pages/Register";
+import { Profile } from "./pages/Profile";
 
 export default function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center px-4">
-        <h1 className="text-4xl font-bold text-blue-600">Анализатор</h1>
-        <p className="mt-4 text-gray-600 max-w-2xl">
-          Интеллектуальная система анализа наборов данных для решения задач
-          машинного обучения
-        </p>
+    <BrowserRouter>
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+        <Header />
+        <main className="flex-1">
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route element={<RequireAuth />}>
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+          </Routes>
+        </main>
+        <div className="fixed bottom-4 right-4">
+          <ServerStatus />
+        </div>
       </div>
-      <div className="fixed bottom-4 right-4">
-        <ServerStatus />
-      </div>
-    </div>
+    </BrowserRouter>
   );
 }
