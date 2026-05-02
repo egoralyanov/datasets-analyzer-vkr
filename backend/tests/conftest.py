@@ -22,6 +22,18 @@ from app.core.db import SessionLocal, engine
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.models.user import User
+from seeds.seed_quality_rules import seed as seed_quality_rules
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_quality_rules_seeded() -> None:
+    """
+    Гарантирует наличие 12 правил quality_rules в БД до запуска тестов.
+
+    Тесты quality_checker.run_quality_checks подгружают правила из БД, поэтому
+    при чистой БД (например, после `make clean`) их нужно засеять. Идемпотентно.
+    """
+    seed_quality_rules()
 
 
 @pytest.fixture
