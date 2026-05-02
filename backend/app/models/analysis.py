@@ -19,7 +19,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.db import Base
 
 if TYPE_CHECKING:
+    from app.models.analysis_result import AnalysisResult
     from app.models.dataset import Dataset
+    from app.models.quality_flag import QualityFlag
     from app.models.user import User
 
 
@@ -56,3 +58,9 @@ class Analysis(Base):
 
     dataset: Mapped["Dataset"] = relationship(back_populates="analyses")
     user: Mapped["User"] = relationship(back_populates="analyses")
+    result: Mapped["AnalysisResult | None"] = relationship(
+        back_populates="analysis", cascade="all, delete-orphan", uselist=False
+    )
+    flags: Mapped[list["QualityFlag"]] = relationship(
+        back_populates="analysis", cascade="all, delete-orphan"
+    )

@@ -29,6 +29,9 @@ COPY alembic ./alembic
 # Тесты — нужны для `make test` (docker compose exec backend pytest).
 COPY tests ./tests
 
+# Сид-скрипты для справочников (quality_rules и т.п.).
+COPY seeds ./seeds
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
