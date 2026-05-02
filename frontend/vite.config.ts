@@ -4,11 +4,10 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // react-plotly.js и plotly.js-dist-min — CommonJS-модули. Vite по умолчанию
-  // не пре-бандлит их в ESM-обёртку для production-сборки rolldown'ом, и
-  // default-импорт получает объект `{default: ...}` вместо самой функции.
-  // Принудительный pre-bundling решает проблему ESM/CJS interop.
+  // plotly.js-dist-min — CommonJS-модуль (UMD-бандл). Pre-bundling в Vite
+  // гарантирует корректный ESM-интероп при использовании в нашей обёртке
+  // PlotlyChart (см. components/analysis/PlotlyChart.tsx).
   optimizeDeps: {
-    include: ['react-plotly.js', 'plotly.js-dist-min'],
+    include: ['plotly.js-dist-min'],
   },
 })

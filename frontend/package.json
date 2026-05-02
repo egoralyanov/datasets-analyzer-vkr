@@ -17,7 +17,6 @@
     "plotly.js-dist-min": "^3.5.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-plotly.js": "^2.6.0",
     "react-router-dom": "^7.14.2",
     "zustand": "^5.0.12"
   },
@@ -26,7 +25,6 @@
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@types/react-plotly.js": "^2.6.4",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
     "eslint": "^10.2.1",

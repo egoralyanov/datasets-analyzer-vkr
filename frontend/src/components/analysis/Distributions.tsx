@@ -1,14 +1,8 @@
 // Графики профайлинга: гистограммы числовых, bar chart категориальных,
-// heatmap корреляций. Plotly через react-plotly.js — интерактивный (zoom, hover).
-//
-// Default-импорт `import Plot from "react-plotly.js"` несовместим с React 19
-// (factory выдаёт legacy-class, обёрнутый Babel в объект, а не функцию-компонент).
-// Создаём компонент явно через factory + plotly.js — это надёжный путь,
-// рекомендованный в .knowledge/troubleshooting.md.
-// react-plotly.js и plotly.js-dist-min — CommonJS-зависимости.
-// Pre-bundling в Vite (см. optimizeDeps в vite.config.ts) гарантирует,
-// что default-импорт даёт саму функцию-компонент, а не CJS-обёртку.
-import Plot from "react-plotly.js";
+// heatmap корреляций. Используется собственная обёртка над plotly.js —
+// см. ./PlotlyChart.tsx, там же объяснение почему отказались от
+// react-plotly.js (несовместимость с React 19).
+import { PlotlyChart } from "./PlotlyChart";
 import { BarChart3 } from "lucide-react";
 import type { MetaFeatures } from "../../types/analysis";
 
@@ -62,7 +56,7 @@ export function Distributions({ meta }: Props) {
           <h3 className="text-sm font-medium text-slate-700">
             Распределение целевой переменной
           </h3>
-          <Plot
+          <PlotlyChart
             data={[
               {
                 type: "bar",
@@ -79,7 +73,6 @@ export function Distributions({ meta }: Props) {
             }}
             config={PLOT_CONFIG}
             style={{ width: "100%" }}
-            useResizeHandler
           />
         </div>
       )}
@@ -102,7 +95,7 @@ export function Distributions({ meta }: Props) {
                   className="rounded border border-slate-200 p-3"
                 >
                   <p className="text-xs font-medium text-slate-700">{col}</p>
-                  <Plot
+                  <PlotlyChart
                     data={[
                       {
                         type: "bar",
@@ -120,8 +113,7 @@ export function Distributions({ meta }: Props) {
                     }}
                     config={PLOT_CONFIG}
                     style={{ width: "100%" }}
-                    useResizeHandler
-                  />
+                          />
                 </div>
               );
             })}
@@ -148,7 +140,7 @@ export function Distributions({ meta }: Props) {
                     </span>
                   )}
                 </p>
-                <Plot
+                <PlotlyChart
                   data={[
                     {
                       type: "bar",
@@ -165,8 +157,7 @@ export function Distributions({ meta }: Props) {
                   }}
                   config={PLOT_CONFIG}
                   style={{ width: "100%" }}
-                  useResizeHandler
-                />
+                      />
               </div>
             ))}
           </div>
@@ -194,7 +185,7 @@ function CorrelationHeatmap({
   const z = labels.map((row) => labels.map((col) => matrix[row][col] ?? 0));
 
   return (
-    <Plot
+    <PlotlyChart
       data={[
         {
           type: "heatmap",
@@ -216,7 +207,6 @@ function CorrelationHeatmap({
       }}
       config={PLOT_CONFIG}
       style={{ width: "100%" }}
-      useResizeHandler
     />
   );
 }
