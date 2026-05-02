@@ -17,8 +17,10 @@ COPY pyproject.toml ./
 COPY app ./app
 
 # Устанавливаем зависимости вместе с dev-инструментами (pytest, httpx — нужны для make test).
+# Editable-install (-e): site-packages указывает на /app, поэтому при bind-mount
+# из docker-compose pytest и uvicorn видят актуальный код без пересборки образа.
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir ".[dev]"
+    pip install --no-cache-dir -e ".[dev]"
 
 # Конфигурация и шаблоны миграций Alembic.
 COPY alembic.ini ./
