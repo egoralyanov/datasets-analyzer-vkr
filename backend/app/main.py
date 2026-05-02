@@ -1,7 +1,7 @@
 """Точка входа FastAPI-приложения."""
 from fastapi import FastAPI
 
-from app.api import auth, health
+from app.api import auth, datasets, health
 from app.config import settings
 
 app = FastAPI(
@@ -13,3 +13,4 @@ app = FastAPI(
 # Все роуты публикуются под префиксом /api — фронт ходит сюда через nginx-прокси.
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(datasets.router, prefix="/api")

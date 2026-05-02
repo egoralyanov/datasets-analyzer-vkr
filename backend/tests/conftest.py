@@ -3,10 +3,13 @@
 
 Тесты используют ту же БД `analyzer` (production-like: PostgreSQL + pgvector).
 Изоляция между тестами — через TRUNCATE users CASCADE в teardown фикстуры
-db_session: каскад чистит datasets и analyses.
+db_session: каскад чистит datasets и analyses. Файлы датасетов на диске
+чистит фикстура datasets_storage_cleanup (autouse).
 """
+import shutil
 import uuid
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -14,6 +17,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.core.db import SessionLocal, engine
 from app.core.security import create_access_token, hash_password
 from app.main import app
@@ -77,3 +81,16 @@ def auth_headers() -> Callable[[User], dict[str, str]]:
         return {"Authorization": f"Bearer {token}"}
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def datasets_storage_cleanup() -> Iterator[None]:
+    """Чистит файловое хранилище датасетов после каждого теста."""
+    yield
+    storage = Path(settings.DATASETS_DIR)
+    if storage.exists():
+        for child in storage.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink(missing_ok=True)
