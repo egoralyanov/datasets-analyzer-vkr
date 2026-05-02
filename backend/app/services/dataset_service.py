@@ -59,6 +59,18 @@ def _read_dataframe(path: Path, fmt: str) -> pd.DataFrame:
     raise ValueError(f"Неподдерживаемый формат: {fmt}")
 
 
+def read_dataset_full(path: Path, fmt: str) -> pd.DataFrame:
+    """
+    Загружает датасет целиком в DataFrame.
+
+    Используется анализом (профайлер + quality checker) — в отличие от
+    read_dataset_preview, который отдаёт только первые 100 строк для UI.
+    Для очень больших датасетов профайлер сам выполняет сэмплирование
+    до 50 000 строк (см. profiler.maybe_sample).
+    """
+    return _read_dataframe(path, fmt)
+
+
 def read_dataset_preview(path: Path, fmt: str, max_rows: int = 100) -> dict[str, Any]:
     """
     Читает датасет и возвращает структуру для UI: первые max_rows строк,
