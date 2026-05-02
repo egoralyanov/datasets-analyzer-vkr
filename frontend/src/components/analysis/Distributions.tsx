@@ -5,24 +5,12 @@
 // (factory выдаёт legacy-class, обёрнутый Babel в объект, а не функцию-компонент).
 // Создаём компонент явно через factory + plotly.js — это надёжный путь,
 // рекомендованный в .knowledge/troubleshooting.md.
-// Импорт factory через namespace + fallback на default: rolldown по-разному
-// интероперабит CommonJS-модули с `exports["default"]`, и прямой default-import
-// иногда даёт объект `{default: factoryFn}` вместо самой функции.
-// Конструкция `mod.default ?? mod` устойчива к обоим вариантам.
-import * as factoryModule from "react-plotly.js/factory";
-// plotly.js-dist-min — готовый минифицированный browser-бандл без node-only
-// зависимостей (buffer/ и т.п.). Полный пакет plotly.js не собирается в Vite,
-// потому что image trace тянет node:buffer.
-// @ts-expect-error — у пакета нет типов, но это просто аргумент фабрики.
-import Plotly from "plotly.js-dist-min";
+// react-plotly.js и plotly.js-dist-min — CommonJS-зависимости.
+// Pre-bundling в Vite (см. optimizeDeps в vite.config.ts) гарантирует,
+// что default-импорт даёт саму функцию-компонент, а не CJS-обёртку.
+import Plot from "react-plotly.js";
 import { BarChart3 } from "lucide-react";
 import type { MetaFeatures } from "../../types/analysis";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const factoryFn: any =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (factoryModule as any).default ?? factoryModule;
-const Plot = factoryFn(Plotly);
 
 type Props = {
   meta: MetaFeatures;
