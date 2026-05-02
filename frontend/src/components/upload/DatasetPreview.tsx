@@ -1,10 +1,11 @@
-import { FileSpreadsheet, FileText, Trash2 } from "lucide-react";
+import { FileSpreadsheet, FileText, Play, Trash2 } from "lucide-react";
 import type { DatasetWithPreview } from "../../types/dataset";
 import { formatBytes, formatDateTime, formatNumber } from "../../lib/format";
 
 interface Props {
   data: DatasetWithPreview;
   onDelete: () => void;
+  onAnalyze: () => void;
 }
 
 // Цвет pill-badge по dtype колонки.
@@ -35,7 +36,7 @@ function renderCell(value: unknown): string {
   return String(value);
 }
 
-export function DatasetPreview({ data, onDelete }: Props) {
+export function DatasetPreview({ data, onDelete, onAnalyze }: Props) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between gap-3 p-5 border-b border-slate-200">
@@ -48,11 +49,11 @@ export function DatasetPreview({ data, onDelete }: Props) {
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            disabled
-            title="Появится в Спринте 2"
-            className="inline-flex items-center rounded-md bg-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 cursor-not-allowed"
+            onClick={onAnalyze}
+            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
           >
-            Перейти к анализу (скоро)
+            <Play className="h-4 w-4" />
+            Запустить анализ
           </button>
           <button
             type="button"

@@ -1,21 +1,28 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { datasetsApi } from "../api/datasets";
+import { analysesApi } from "../api/analyses";
 import type { Dataset, DatasetWithPreview } from "../types/dataset";
+import type { HintedTaskType } from "../types/analysis";
 import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
 import { FileDropZone } from "../components/upload/FileDropZone";
 import { DatasetPreview } from "../components/upload/DatasetPreview";
+import { StartAnalysisModal } from "../components/upload/StartAnalysisModal";
 
 type Toast = { kind: "success" | "error"; text: string } | null;
 
 export function Upload() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const previewRef = useRef<HTMLDivElement>(null);
 
   const [current, setCurrent] = useState<DatasetWithPreview | null>(null);
   const [uploadPercent, setUploadPercent] = useState(0);
   const [toast, setToast] = useState<Toast>(null);
+  const [analyzeOpen, setAnalyzeOpen] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   // Авто-скрытие тоста через 3 секунды.
   useEffect(() => {
@@ -72,6 +79,24 @@ export function Upload() {
     deleteMutation.mutate(id);
   };
 
+  const startAnalysisMutation = useMutation({
+    mutationFn: (params: {
+      target_column: string | null;
+      hinted_task_type: HintedTaskType | null;
+    }) => {
+      if (!current) throw new Error("Сначала выберите датасет");
+      return analysesApi.start(current.id, params);
+    },
+    onSuccess: (analysis) => {
+      setAnalyzeOpen(false);
+      setAnalyzeError(null);
+      navigate(`/analyses/${analysis.id}`);
+    },
+    onError: (err) => {
+      setAnalyzeError(extractAnalysisError(err));
+    },
+  });
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
       <h1 className="text-2xl font-semibold text-slate-900">Загрузка датасета</h1>
@@ -104,9 +129,22 @@ export function Upload() {
           <DatasetPreview
             data={current}
             onDelete={() => onDelete(current.id, current.original_filename)}
+            onAnalyze={() => {
+              setAnalyzeError(null);
+              setAnalyzeOpen(true);
+            }}
           />
         )}
       </div>
+
+      <StartAnalysisModal
+        open={analyzeOpen}
+        columns={current?.preview.columns ?? []}
+        isPending={startAnalysisMutation.isPending}
+        errorText={analyzeError}
+        onClose={() => setAnalyzeOpen(false)}
+        onSubmit={(params) => startAnalysisMutation.mutate(params)}
+      />
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-slate-900">Мои датасеты</h2>
@@ -205,6 +243,18 @@ function DatasetCard({
       </div>
     </div>
   );
+}
+
+// Карта серверных кодов в сообщение об ошибке для запуска анализа.
+function extractAnalysisError(err: unknown): string {
+  const e = err as {
+    response?: { status?: number; data?: { detail?: unknown } };
+  };
+  const detail = e.response?.data?.detail;
+  if (e.response?.status === 400 && typeof detail === "string") return detail;
+  if (e.response?.status === 404) return "Датасет не найден.";
+  if (typeof detail === "string") return detail;
+  return "Не удалось запустить анализ. Попробуйте ещё раз.";
 }
 
 // Карта серверных кодов в человеческие сообщения для загрузки датасета.

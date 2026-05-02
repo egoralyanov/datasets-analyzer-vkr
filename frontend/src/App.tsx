@@ -7,6 +7,7 @@ import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Profile } from "./pages/Profile";
 import { Upload } from "./pages/Upload";
+import { AnalysisResult } from "./pages/AnalysisResult";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
             <Route element={<RequireAuth />}>
               <Route path="/upload" element={<Upload />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/analyses/:id" element={<AnalysisResult />} />
             </Route>
           </Routes>
         </main>

@@ -56,6 +56,11 @@ services:
     restart: unless-stopped
     ports:
       - "3000:80"
+    volumes:
+      # Bind-mount собранного dist в nginx-html. После `npm run build` локально
+      # nginx сразу раздаёт свежие ассеты без пересборки образа. На проде/CI
+      # эта строка не нужна — образ уже содержит dist через multi-stage build.
+      - ./frontend/dist:/usr/share/nginx/html
     depends_on:
       - backend
 
