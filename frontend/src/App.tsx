@@ -1,4 +1,6 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { Header } from "./components/layout/Header";
 import { ServerStatus } from "./components/ServerStatus";
 import { RequireAuth } from "./components/layout/RequireAuth";
@@ -7,7 +9,13 @@ import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Profile } from "./pages/Profile";
 import { Upload } from "./pages/Upload";
-import { AnalysisResult } from "./pages/AnalysisResult";
+
+// AnalysisResult тащит за собой Plotly (~3 МБ) — выносим в отдельный chunk,
+// чтобы main bundle оставался лёгким и не падал на init из-за тяжёлой
+// зависимости. Plotly грузится только когда пользователь открыл /analyses/:id.
+const AnalysisResult = lazy(() =>
+  import("./pages/AnalysisResult").then((m) => ({ default: m.AnalysisResult })),
+);
 
 export default function App() {
   return (
@@ -22,7 +30,14 @@ export default function App() {
             <Route element={<RequireAuth />}>
               <Route path="/upload" element={<Upload />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/analyses/:id" element={<AnalysisResult />} />
+              <Route
+                path="/analyses/:id"
+                element={
+                  <Suspense fallback={<RouteSpinner />}>
+                    <AnalysisResult />
+                  </Suspense>
+                }
+              />
             </Route>
           </Routes>
         </main>
@@ -31,5 +46,13 @@ export default function App() {
         </div>
       </div>
     </BrowserRouter>
+  );
+}
+
+function RouteSpinner() {
+  return (
+    <div className="flex h-[60vh] items-center justify-center text-slate-500">
+      <Loader2 className="h-6 w-6 animate-spin" />
+    </div>
   );
 }
