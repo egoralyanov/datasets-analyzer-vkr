@@ -27,6 +27,9 @@ dependencies = [
     "pandas>=2.2.0",
     "openpyxl>=3.1",
     "chardet>=5.0",
+    # Science (со Спринта 2: профайлер, тесты нормальности, Mutual Information)
+    "scipy>=1.12",
+    "scikit-learn>=1.4",
 ]
 
 [project.optional-dependencies]
