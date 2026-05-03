@@ -10,9 +10,14 @@ ORM-модель результата анализа датасета.
   `distributions` и `correlations` для отрисовки графиков на фронте — они часть
   профиля, выделять их в отдельные колонки смысла нет.
 - `embedding` vector(128) — нормализованный вектор meta-features для подбора
-  похожих датасетов через косинусную меру (Спринт 3). На Спринте 2 заполняется null.
-- `task_recommendation` JSONB — рекомендация типа задачи (Спринт 3).
-- `baseline` JSONB — метрики baseline-моделей (Спринт 3).
+  похожих датасетов через косинусную меру.
+- `task_recommendation` JSONB — рекомендация типа задачи (структура: task_type_code,
+  confidence, source, applied_rules, ml_probas, explanation).
+- `baseline` JSONB — метрики baseline-моделей (models, metrics, feature_importance,
+  excluded_columns_due_to_leakage, n_rows_used, n_features_used, trained_at).
+- `baseline_status` — состояние фоновой задачи обучения baseline:
+  not_started → running → done | failed.
+- `baseline_error` — текст ошибки, если baseline упал (обрезается до 500 символов).
 """
 from __future__ import annotations
 
@@ -21,7 +26,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +48,10 @@ class AnalysisResult(Base):
     embedding: Mapped[list[float] | None] = mapped_column(Vector(128), nullable=True)
     task_recommendation: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     baseline: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    baseline_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="not_started"
+    )
+    baseline_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.current_timestamp()
     )
