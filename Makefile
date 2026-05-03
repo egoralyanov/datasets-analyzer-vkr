@@ -1,7 +1,7 @@
 # Makefile для проекта «Анализатор»
 # Все команды разработки идут через docker compose v2.
 
-.PHONY: up down logs migrate migrate-create seed seed-rules seed-all build-real-set build-synthetic-set train-meta test clean
+.PHONY: up down logs migrate migrate-create seed seed-rules seed-catalog seed-all build-real-set build-synthetic-set train-meta test clean
 
 # Поднять все контейнеры (postgres, backend, frontend) в фоне
 up:
@@ -48,18 +48,26 @@ build-synthetic-set:
 train-meta:
 	docker compose exec backend python -m ml.train_meta_classifier
 
-# Полный сид: правила качества + каталог внешних датасетов + мета-классификатор.
-# seed-catalog появится в Phase 4. Сейчас seed-all запустит всё что есть.
+# Заливка каталога external_datasets в БД из real_set.json + scaler.pkl.
+# Идемпотентно через ON CONFLICT (title) DO UPDATE; embedding'и пересчитываются
+# при изменении scaler'а или meta_features.
+seed-catalog:
+	docker compose exec backend python -m seeds.seed_external_datasets
+
+# Полный сид: правила качества + мета-классификатор (если нужен) + каталог.
+# Порядок важен: seed-catalog требует обученного scaler.pkl (train-meta),
+# и наличия таблицы external_datasets (миграция Phase 1 уже применена через `make migrate`).
 seed-all: seed-rules
 	@if [ ! -f backend/ml/data/real_set.json ]; then \
-		echo "real_set.json не найден — запустите 'make build-real-set'"; \
+		echo "real_set.json не найден — запустите 'make build-real-set'"; exit 1; \
 	fi
 	@if [ ! -f backend/ml/data/synthetic_set.json ]; then \
-		echo "synthetic_set.json не найден — запустите 'make build-synthetic-set'"; \
+		echo "synthetic_set.json не найден — запустите 'make build-synthetic-set'"; exit 1; \
 	fi
 	@if [ ! -f backend/ml/models/meta_classifier.pkl ]; then \
 		$(MAKE) train-meta; \
 	fi
+	$(MAKE) seed-catalog
 
 # Запустить unit-тесты бэкенда внутри контейнера
 test:

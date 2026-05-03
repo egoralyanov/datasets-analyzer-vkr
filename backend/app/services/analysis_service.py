@@ -23,6 +23,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.repositories import analysis_repo
 from app.repositories.quality_flag_repo import bulk_create_flags
+from app.services.dataset_matcher import _load_scaler_safe, meta_features_to_embedding
 from app.services.dataset_service import read_dataset_full
 from app.services.profiler import compute_meta_features
 from app.services.quality_checker import run_quality_checks
@@ -77,9 +78,30 @@ def run_analysis(
             df, analysis.target_column, meta, analysis_id, db
         )
 
-        # 3) Атомарное сохранение всех результатов и финального статуса.
+        # 3) Embedding для подбора похожих датасетов через pgvector.
+        # При отсутствии scaler.pkl (модель не обучена) — анализ не валим,
+        # embedding остаётся NULL: пользователь увидит результат без секции
+        # «Похожие датасеты». См. .knowledge/methods/dataset-matching.md.
+        embedding: list[float] | None = None
+        try:
+            scaler = _load_scaler_safe()
+            if scaler is not None:
+                embedding = meta_features_to_embedding(meta, scaler)
+            else:
+                logger.warning(
+                    "scaler not loaded — analysis_results.embedding will be NULL "
+                    "for analysis_id=%s",
+                    analysis_id,
+                )
+        except Exception:  # noqa: BLE001 — embedding опционален
+            logger.exception(
+                "Failed to compute embedding for analysis_id=%s; continuing without it",
+                analysis_id,
+            )
+
+        # 4) Атомарное сохранение всех результатов и финального статуса.
         bulk_create_flags(db, flags)
-        analysis_repo.save_analysis_result(db, analysis_id, meta)
+        analysis_repo.save_analysis_result(db, analysis_id, meta, embedding=embedding)
         analysis_repo.update_status(
             db,
             analysis_id,

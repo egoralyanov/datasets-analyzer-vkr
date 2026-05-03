@@ -98,22 +98,28 @@ def save_analysis_result(
     db: Session,
     analysis_id: uuid.UUID,
     meta_features: dict[str, Any],
+    *,
+    embedding: list[float] | None = None,
 ) -> AnalysisResult:
     """
     Создаёт запись результата анализа (или обновляет, если уже есть).
 
     Структура: meta_features (JSONB) — все ~30 признаков + вложенные
-    distributions/correlations для UI. embedding/task_recommendation/baseline
-    заполняются в Спринте 3.
+    distributions/correlations для UI. `embedding` — pgvector(128) для
+    подбора похожих датасетов (Phase 4). `task_recommendation` и `baseline`
+    заполняются позже в Phase 6 / Phase 5.
     """
     existing = db.get(AnalysisResult, analysis_id)
     if existing is not None:
         existing.meta_features = meta_features
+        if embedding is not None:
+            existing.embedding = embedding
         existing.updated_at = datetime.now(timezone.utc)
         return existing
     result = AnalysisResult(
         analysis_id=analysis_id,
         meta_features=meta_features,
+        embedding=embedding,
     )
     db.add(result)
     return result

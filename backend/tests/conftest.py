@@ -22,6 +22,7 @@ from app.core.db import SessionLocal, engine
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.models.user import User
+from seeds.seed_external_datasets import seed as seed_external_datasets
 from seeds.seed_quality_rules import seed as seed_quality_rules
 
 
@@ -34,6 +35,24 @@ def _ensure_quality_rules_seeded() -> None:
     при чистой БД (например, после `make clean`) их нужно засеять. Идемпотентно.
     """
     seed_quality_rules()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_external_datasets_seeded() -> None:
+    """
+    Гарантирует наличие каталога external_datasets для тестов matcher'а.
+
+    TRUNCATE users CASCADE в db_session не трогает external_datasets (нет FK
+    на users), поэтому каталог переживает между тестами в рамках одного
+    pytest-прогона и заливается ровно один раз. При отсутствии scaler.pkl
+    или real_set.json — RuntimeError, тесты явно падают.
+    """
+    try:
+        seed_external_datasets()
+    except RuntimeError:
+        # Если scaler.pkl/real_set.json отсутствуют — тесты, требующие каталог,
+        # упадут со своим понятным сообщением. Не маскируем эту ситуацию.
+        pass
 
 
 @pytest.fixture
