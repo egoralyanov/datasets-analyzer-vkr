@@ -8,7 +8,6 @@ export type Analysis = {
   dataset_id: string;
   status: AnalysisStatus;
   target_column: string | null;
-  hinted_task_type: string | null;
   started_at: string;
   finished_at: string | null;
   error_message: string | null;
@@ -140,11 +139,4 @@ export type SimilarDataset = {
 
 export type StartAnalysisRequest = {
   target_column?: string | null;
-  hinted_task_type?: string | null;
 };
-
-export type HintedTaskType =
-  | "binary_classification"
-  | "multiclass_classification"
-  | "regression"
-  | "clustering";

@@ -18,14 +18,18 @@ def create_analysis(
     dataset_id: uuid.UUID,
     user_id: uuid.UUID,
     target_column: str | None,
-    hinted_task_type: str | None,
 ) -> Analysis:
-    """Создаёт запись анализа в статусе pending — БД-фиксация через commit."""
+    """Создаёт запись анализа в статусе pending — БД-фиксация через commit.
+
+    Колонка `hinted_task_type` исторически осталась в схеме БД из Спринта 1,
+    но больше не заполняется: в Спринте 3 тип задачи определяет рекомендатер,
+    а не пользовательская подсказка. Старые записи остаются без изменений,
+    новые записываются с NULL по умолчанию (сервер-сторона).
+    """
     analysis = Analysis(
         dataset_id=dataset_id,
         user_id=user_id,
         target_column=target_column,
-        hinted_task_type=hinted_task_type,
         status="pending",
     )
     db.add(analysis)

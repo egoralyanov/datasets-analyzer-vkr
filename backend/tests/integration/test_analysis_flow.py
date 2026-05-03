@@ -74,7 +74,6 @@ def test_start_analysis_returns_202_with_correct_metadata(
     body = response.json()
     assert body["dataset_id"] == dataset["id"]
     assert body["target_column"] == "target"
-    assert body["hinted_task_type"] is None
     # В TestClient BG выполняется синхронно — к моменту ответа уже done.
     # Допускаем оба варианта (pending/done) на случай будущих изменений.
     assert body["status"] in {"pending", "done"}

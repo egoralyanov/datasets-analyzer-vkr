@@ -102,7 +102,6 @@ def start_analysis(
         dataset_id=dataset.id,
         user_id=current_user.id,
         target_column=payload.target_column,
-        hinted_task_type=payload.hinted_task_type,
     )
 
     # SessionLocal — фабрика, не активная сессия. BackgroundTask откроет

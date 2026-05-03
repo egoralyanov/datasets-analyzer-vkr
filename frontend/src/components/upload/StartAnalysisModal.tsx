@@ -1,14 +1,5 @@
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
-import type { HintedTaskType } from "../../types/analysis";
-
-const HINTED_OPTIONS: { value: "" | HintedTaskType; label: string }[] = [
-  { value: "", label: "Не указывать" },
-  { value: "binary_classification", label: "Бинарная классификация" },
-  { value: "multiclass_classification", label: "Мультикласс-классификация" },
-  { value: "regression", label: "Регрессия" },
-  { value: "clustering", label: "Кластеризация (без target)" },
-];
 
 type Props = {
   open: boolean;
@@ -16,10 +7,7 @@ type Props = {
   isPending: boolean;
   errorText?: string | null;
   onClose: () => void;
-  onSubmit: (params: {
-    target_column: string | null;
-    hinted_task_type: HintedTaskType | null;
-  }) => void;
+  onSubmit: (params: { target_column: string | null }) => void;
 };
 
 export function StartAnalysisModal({
@@ -31,13 +19,11 @@ export function StartAnalysisModal({
   onSubmit,
 }: Props) {
   const [target, setTarget] = useState<string>("");
-  const [hint, setHint] = useState<"" | HintedTaskType>("");
 
   // Сброс формы при открытии модалки.
   useEffect(() => {
     if (open) {
       setTarget("");
-      setHint("");
     }
   }, [open]);
 
@@ -77,8 +63,9 @@ export function StartAnalysisModal({
           </button>
         </div>
         <p className="mt-1 text-sm text-slate-600">
-          Параметры опциональны. Если задачи нет (анализ ради профилирования) —
-          оставьте оба поля пустыми.
+          Если у вас есть колонка-цель для предсказания — укажите её. Если
+          нет — система проанализирует структуру данных и предложит подходящие
+          типы задач машинного обучения.
         </p>
 
         <form
@@ -87,7 +74,6 @@ export function StartAnalysisModal({
             e.preventDefault();
             onSubmit({
               target_column: target || null,
-              hinted_task_type: hint || null,
             });
           }}
         >
@@ -96,7 +82,7 @@ export function StartAnalysisModal({
               htmlFor="target-column"
               className="block text-sm font-medium text-slate-700"
             >
-              Целевая переменная
+              Целевая переменная (опционально)
             </label>
             <select
               id="target-column"
@@ -105,32 +91,10 @@ export function StartAnalysisModal({
               disabled={isPending}
               className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
             >
-              <option value="">Без target</option>
+              <option value="">Без целевой переменной</option>
               {columns.map((c) => (
                 <option key={c} value={c}>
                   {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="hinted-task-type"
-              className="block text-sm font-medium text-slate-700"
-            >
-              Подсказка по типу задачи
-            </label>
-            <select
-              id="hinted-task-type"
-              value={hint}
-              onChange={(e) => setHint(e.target.value as "" | HintedTaskType)}
-              disabled={isPending}
-              className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-            >
-              {HINTED_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
                 </option>
               ))}
             </select>

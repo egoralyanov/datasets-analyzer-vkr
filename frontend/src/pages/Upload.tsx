@@ -5,7 +5,6 @@ import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { datasetsApi } from "../api/datasets";
 import { analysesApi } from "../api/analyses";
 import type { Dataset, DatasetWithPreview } from "../types/dataset";
-import type { HintedTaskType } from "../types/analysis";
 import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
 import { FileDropZone } from "../components/upload/FileDropZone";
 import { DatasetPreview } from "../components/upload/DatasetPreview";
@@ -80,10 +79,7 @@ export function Upload() {
   };
 
   const startAnalysisMutation = useMutation({
-    mutationFn: (params: {
-      target_column: string | null;
-      hinted_task_type: HintedTaskType | null;
-    }) => {
+    mutationFn: (params: { target_column: string | null }) => {
       if (!current) throw new Error("Сначала выберите датасет");
       return analysesApi.start(current.id, params);
     },

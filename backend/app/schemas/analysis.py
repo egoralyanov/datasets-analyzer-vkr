@@ -9,15 +9,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class StartAnalysisRequest(BaseModel):
-    """Параметры запуска анализа: оба поля опциональные."""
+    """Параметры запуска анализа.
+
+    `target_column` опционален: без него анализ выполняется без target (кластеризация),
+    тип задачи определяется рекомендателем (Слой 1 правил + Слой 2 ML).
+    """
 
     target_column: str | None = Field(
         default=None,
-        description="Имя целевого столбца. Если не указано — анализ без target (кластеризация).",
-    )
-    hinted_task_type: str | None = Field(
-        default=None,
-        description="Подсказка от пользователя по типу задачи (используется в Спринте 3).",
+        description="Имя целевого столбца. Если не указано — анализ без target.",
     )
 
 
@@ -30,7 +30,6 @@ class AnalysisResponse(BaseModel):
     dataset_id: uuid.UUID
     status: str
     target_column: str | None
-    hinted_task_type: str | None
     started_at: datetime
     finished_at: datetime | None
     error_message: str | None
