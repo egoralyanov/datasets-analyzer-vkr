@@ -1,0 +1,98 @@
+{
+  "n_total": 177,
+  "n_real": 27,
+  "n_synthetic": 150,
+  "n_clustering_excluded": 2,
+  "classes": [
+    "BINARY_CLASSIFICATION",
+    "MULTICLASS_CLASSIFICATION",
+    "REGRESSION"
+  ],
+  "class_distribution": {
+    "BINARY_CLASSIFICATION": 35,
+    "MULTICLASS_CLASSIFICATION": 59,
+    "REGRESSION": 83
+  },
+  "feature_order": [
+    "n_rows",
+    "n_cols",
+    "memory_mb",
+    "__features_to_rows_ratio__",
+    "total_missing_pct",
+    "max_col_missing_pct",
+    "duplicate_rows_pct",
+    "mean_skewness",
+    "mean_kurtosis",
+    "normality_test_pvalue",
+    "outliers_pct",
+    "target_n_unique",
+    "max_abs_correlation",
+    "target_correlation_max",
+    "target_mutual_information_max",
+    "target_mutual_information_mean"
+  ],
+  "removed_features_due_to_structural_leakage": {
+    "features": [
+      "target_imbalance_ratio",
+      "target_class_entropy",
+      "target_skewness"
+    ],
+    "reason": "Профайлер возвращает None для этих признаков на регрессионных датасетах (где target_kind == 'regression') и числовое значение на классификационных. Замена None → 0.0 в meta_features_to_vector превращала их в бинарный индикатор target_kind == 'categorical' — косвенный leakage, эквивалентный включению самого target_kind как фичи. Удаление снижает CV f1_macro с искусственного 0.987 до содержательного диапазона 0.85–0.92."
+  },
+  "added_features": {
+    "features": [
+      "target_n_unique"
+    ],
+    "reason": "Continuous descriptive statistic, computed via series.nunique() unconditionally (без зависимости от target_kind, не None). Canonical simple meta-feature per Vanschoren 2018 §3.2 ('number of classes / target values'). Возвращает 2 для binary, 3-20 для multiclass, сотни-тысячи для regression. Добавлен на третьей итерации Phase 2: после удаления target_imbalance_ratio/_class_entropy/_skewness Слой 2 потерял сигнал для различения BINARY vs MULTICLASS (CV f1_macro = 0.796); target_n_unique восстанавливает этот сигнал без leakage."
+  },
+  "cv_metrics": {
+    "accuracy": {
+      "mean": 0.9773015873015873,
+      "std": 0.021340796124772462
+    },
+    "f1_macro": {
+      "mean": 0.9760085976825108,
+      "std": 0.022369801399185946
+    },
+    "f1_weighted": {
+      "mean": 0.9771805857588465,
+      "std": 0.021432978786192054
+    }
+  },
+  "confusion_matrix": [
+    [
+      34,
+      1,
+      0
+    ],
+    [
+      0,
+      59,
+      0
+    ],
+    [
+      1,
+      2,
+      80
+    ]
+  ],
+  "feature_importances_top10": {
+    "target_n_unique": 0.430904800295484,
+    "max_abs_correlation": 0.1327914372910649,
+    "normality_test_pvalue": 0.09251472120707577,
+    "outliers_pct": 0.08564575474894529,
+    "target_correlation_max": 0.06945507636136854,
+    "target_mutual_information_mean": 0.03921561508053826,
+    "target_mutual_information_max": 0.03803223961728093,
+    "mean_kurtosis": 0.03441276554092296,
+    "mean_skewness": 0.03004275384949665,
+    "n_cols": 0.012072552911794402
+  },
+  "hyperparameters": {
+    "n_estimators": 200,
+    "max_depth": 10,
+    "min_samples_leaf": 2,
+    "class_weight": "balanced",
+    "random_state": 42
+  }
+}

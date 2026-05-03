@@ -6,8 +6,13 @@ HELLO.md
 # --- Планы разработки (локально, не публикуем) ---
 plans/
 
-# --- Локальные данные ---
-data/
+# --- Локальные данные пользователя (корень репо) ---
+/data/
+
+# --- ML-артефакты обучения мета-классификатора ---
+# JSON-источники (real_set.json, synthetic_set.json) и meta_classifier_report.json коммитятся.
+# Сами модели (.pkl) привязаны к версии sklearn — переобучаются через `make seed-all`.
+backend/ml/models/*.pkl
 
 # --- Python ---
 __pycache__/

@@ -564,11 +564,12 @@ def compute_target_features(
         target_col: имя целевого столбца (или None).
 
     Returns:
-        Словарь с ключами target_kind, target_imbalance_ratio,
+        Словарь с ключами target_kind, target_n_unique, target_imbalance_ratio,
         target_class_entropy, target_skewness, target_value_counts.
     """
     result: dict[str, Any] = {
         "target_kind": None,
+        "target_n_unique": None,
         "target_imbalance_ratio": None,
         "target_class_entropy": None,
         "target_skewness": None,
@@ -580,6 +581,12 @@ def compute_target_features(
     series = df[target_col].dropna()
     if series.empty:
         return result
+
+    # target_n_unique — базовая дескриптивная статистика, вычисляется
+    # независимо от target_kind. Continuous: 2 для binary, 3-20 для multiclass,
+    # сотни-тысячи для regression. Используется как канонический simple
+    # meta-feature (Vanschoren 2018 §3.2 — "number of classes / target values").
+    result["target_n_unique"] = int(series.nunique())
 
     kind = infer_target_kind(series)
     result["target_kind"] = kind
