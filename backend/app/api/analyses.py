@@ -2,11 +2,18 @@
 API-эндпоинты для запуска и получения анализа.
 
 Контракт:
-- POST /api/datasets/{dataset_id}/analyze   → 202 + AnalysisResponse
-- GET  /api/analyses                        → list[AnalysisResponse]
-- GET  /api/analyses/{analysis_id}          → AnalysisResponse (для polling)
-- GET  /api/analyses/{analysis_id}/result   → AnalysisResultResponse
-                                              (409 если status != done)
+- POST /api/datasets/{dataset_id}/analyze       → 202 + AnalysisResponse
+- GET  /api/analyses                            → list[AnalysisResponse]
+- GET  /api/analyses/{analysis_id}              → AnalysisResponse (для polling)
+- GET  /api/analyses/{analysis_id}/result       → AnalysisResultResponse
+                                                  (409 если status != done)
+- POST /api/analyses/{analysis_id}/baseline     → 202 (новый запуск) /
+                                                  200 (уже done, идемпотентность) /
+                                                  409 (уже running либо анализ не done)
+- GET  /api/analyses/{analysis_id}/baseline     → BaselineResultResponse
+                                                  (404 если baseline_status='not_started')
+- GET  /api/analyses/{analysis_id}/similar      → list[SimilarDatasetResponse]
+                                                  (пустой список если embedding=NULL)
 
 Все эндпоинты под Depends(get_current_user). Чужие анализы и датасеты
 дают 404 (не 403) — чтобы не палить факт их существования.
@@ -15,11 +22,12 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.db import SessionLocal
+from app.models.analysis_result import AnalysisResult
 from app.models.user import User
 from app.repositories import analysis_repo, dataset_repo
 from app.repositories.quality_flag_repo import get_flags_for_analysis
@@ -29,7 +37,14 @@ from app.schemas.analysis import (
     QualityFlagResponse,
     StartAnalysisRequest,
 )
+from app.schemas.baseline import (
+    BaselineResultResponse,
+    BaselineStartResponse,
+    SimilarDatasetResponse,
+)
 from app.services.analysis_service import run_analysis
+from app.services.baseline_orchestrator import run_baseline_async
+from app.services.dataset_matcher import find_similar_datasets
 
 router = APIRouter(tags=["analyses"])
 
@@ -129,7 +144,11 @@ def get_analysis_result(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AnalysisResultResponse:
-    """Полный результат — meta-features + флаги. Только для done-анализов."""
+    """Полный результат — meta-features + флаги + рекомендация типа задачи + embedding.
+
+    Только для done-анализов (409 иначе). task_recommendation и embedding
+    могут быть None — например, если scaler/модель отсутствуют (graceful degradation).
+    """
     analysis = analysis_repo.get_analysis(db, analysis_id, current_user.id)
     if analysis is None:
         raise HTTPException(
@@ -161,8 +180,156 @@ def get_analysis_result(
         )
         for flag, rule in flag_rows
     ]
+    # pgvector возвращает embedding как numpy.ndarray — приводим к list[float]
+    # для надёжной JSON-сериализации.
+    embedding_value = analysis.result.embedding
+    embedding_list: list[float] | None = (
+        [float(v) for v in embedding_value] if embedding_value is not None else None
+    )
     return AnalysisResultResponse(
         analysis=AnalysisResponse.model_validate(analysis),
         meta_features=analysis.result.meta_features,
         flags=flags,
+        task_recommendation=analysis.result.task_recommendation,
+        embedding=embedding_list,
     )
+
+
+# =============================================================================
+#                               BASELINE
+# =============================================================================
+
+
+@router.post("/analyses/{analysis_id}/baseline", response_model=BaselineStartResponse)
+def start_baseline(
+    analysis_id: uuid.UUID,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BaselineStartResponse:
+    """Запускает обучение baseline-моделей в фоне.
+
+    Идемпотентность:
+    - повторный POST в `running` → 409 «Baseline уже обучается»;
+    - повторный POST после `done` → 200 OK + текущее состояние (без перезапуска);
+    - POST на анализ со статусом != done → 409.
+
+    Перезапуск с `failed` или `not_started` стартует свежую BG-задачу и
+    возвращает 202.
+    """
+    analysis = analysis_repo.get_analysis(db, analysis_id, current_user.id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Анализ не найден"
+        )
+    if analysis.status != "done":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Сначала дождитесь завершения анализа",
+        )
+
+    ar = db.get(AnalysisResult, analysis_id)
+    if ar is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Результат анализа отсутствует, хотя статус done",
+        )
+
+    if ar.baseline_status == "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Baseline уже обучается"
+        )
+    if ar.baseline_status == "done":
+        # Идемпотентность: возвращаем 200 OK с текущим done-статусом,
+        # но не перезапускаем (фронт может тут же запросить GET /baseline).
+        response.status_code = status.HTTP_200_OK
+        return BaselineStartResponse(analysis_id=analysis_id, baseline_status="done")
+
+    background_tasks.add_task(run_baseline_async, analysis_id, SessionLocal)
+    response.status_code = status.HTTP_202_ACCEPTED
+    return BaselineStartResponse(analysis_id=analysis_id, baseline_status="running")
+
+
+@router.get(
+    "/analyses/{analysis_id}/baseline", response_model=BaselineResultResponse
+)
+def get_baseline(
+    analysis_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BaselineResultResponse:
+    """Текущее состояние baseline-обучения для анализа.
+
+    404 если ни разу не запускали (`baseline_status='not_started'`) — для UI
+    это сигнал показать кнопку «Обучить baseline». Все остальные статусы
+    (running / done / failed) отдаются как 200 + структура с baseline и error.
+    """
+    analysis = analysis_repo.get_analysis(db, analysis_id, current_user.id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Анализ не найден"
+        )
+
+    ar = db.get(AnalysisResult, analysis_id)
+    if ar is None or ar.baseline_status == "not_started":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Baseline не запускался"
+        )
+
+    return BaselineResultResponse(
+        baseline_status=ar.baseline_status,
+        baseline=ar.baseline,
+        baseline_error=ar.baseline_error,
+    )
+
+
+@router.get(
+    "/analyses/{analysis_id}/similar",
+    response_model=list[SimilarDatasetResponse],
+)
+def get_similar(
+    analysis_id: uuid.UUID,
+    top_k: int = 5,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[SimilarDatasetResponse]:
+    """Top-K похожих датасетов из каталога через pgvector.
+
+    Если у анализа нет embedding (scaler не был доступен в момент анализа) —
+    возвращаем пустой список без ошибки: фронт покажет пустую секцию.
+
+    Фильтр task_type_code берётся из task_recommendation, если он определён —
+    это даёт более релевантные «похожие» из той же подкатегории. Если
+    рекомендатер падал, фильтр None и матчер ищет среди всех типов.
+    """
+    analysis = analysis_repo.get_analysis(db, analysis_id, current_user.id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Анализ не найден"
+        )
+
+    ar = db.get(AnalysisResult, analysis_id)
+    if ar is None or ar.embedding is None:
+        return []
+
+    task_type_filter: str | None = None
+    if ar.task_recommendation:
+        candidate = ar.task_recommendation.get("task_type_code")
+        if isinstance(candidate, str):
+            task_type_filter = candidate
+
+    # pgvector хранит numpy.ndarray; репозиторий ожидает list[float].
+    query_embedding = [float(v) for v in ar.embedding]
+
+    similar = find_similar_datasets(
+        db,
+        query_embedding,
+        task_type_filter=task_type_filter,
+        top_k=top_k,
+        metric="cosine",
+    )
+    # SimilarDatasetResponse читает атрибут `distance`, прицепленный
+    # репозиторием через setattr — model_validate (ConfigDict.from_attributes=True)
+    # подхватит его наравне с обычными ORM-полями.
+    return [SimilarDatasetResponse.model_validate(s) for s in similar]

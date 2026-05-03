@@ -47,8 +47,15 @@ class QualityFlagResponse(BaseModel):
 
 
 class AnalysisResultResponse(BaseModel):
-    """Полный результат анализа: meta-features + флаги."""
+    """Полный результат анализа: meta-features + флаги + рекомендация + embedding.
+
+    `task_recommendation` и `embedding` опциональны (None) — они появляются
+    в Спринте 3 и могут быть None для старых анализов из Спринта 2 либо когда
+    рекомендатер/scaler отсутствуют (graceful degradation).
+    """
 
     analysis: AnalysisResponse
     meta_features: dict[str, Any]
     flags: list[QualityFlagResponse]
+    task_recommendation: dict[str, Any] | None = None
+    embedding: list[float] | None = None

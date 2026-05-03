@@ -100,26 +100,32 @@ def save_analysis_result(
     meta_features: dict[str, Any],
     *,
     embedding: list[float] | None = None,
+    task_recommendation: dict[str, Any] | None = None,
 ) -> AnalysisResult:
     """
     Создаёт запись результата анализа (или обновляет, если уже есть).
 
     Структура: meta_features (JSONB) — все ~30 признаков + вложенные
     distributions/correlations для UI. `embedding` — pgvector(128) для
-    подбора похожих датасетов (Phase 4). `task_recommendation` и `baseline`
-    заполняются позже в Phase 6 / Phase 5.
+    подбора похожих датасетов. `task_recommendation` (Phase 6) — JSONB
+    с типом задачи, confidence, applied_rules и explanation. `baseline`
+    заполняется отдельно в baseline_orchestrator после нажатия кнопки
+    «Обучить baseline» (Phase 6).
     """
     existing = db.get(AnalysisResult, analysis_id)
     if existing is not None:
         existing.meta_features = meta_features
         if embedding is not None:
             existing.embedding = embedding
+        if task_recommendation is not None:
+            existing.task_recommendation = task_recommendation
         existing.updated_at = datetime.now(timezone.utc)
         return existing
     result = AnalysisResult(
         analysis_id=analysis_id,
         meta_features=meta_features,
         embedding=embedding,
+        task_recommendation=task_recommendation,
     )
     db.add(result)
     return result
@@ -127,19 +133,33 @@ def save_analysis_result(
 
 def reset_running_to_failed(db: Session) -> int:
     """
-    Переводит все анализы в статусе running в failed.
+    Переводит «зависшие» анализы и baseline-обучения в статус failed.
 
     Вызывается при старте приложения: BackgroundTasks живут в памяти процесса,
     при перезапуске контейнера они теряются, но запись в БД остаётся
-    «зависшей» в running. См. .knowledge/troubleshooting.md, раздел про BackgroundTask.
+    «зависшей» в running. Сбрасываем сразу два статуса:
+    1. `analyses.status='running'` → `'failed'` с error_message;
+    2. `analysis_results.baseline_status='running'` → `'failed'` с baseline_error.
+
+    См. .knowledge/troubleshooting.md, раздел про BackgroundTask.
 
     Returns:
-        Количество переведённых записей.
+        Суммарное число переведённых записей (analyses + baselines).
     """
     running = list(db.scalars(select(Analysis).where(Analysis.status == "running")))
     for a in running:
         a.status = "failed"
         a.error_message = "Прервано перезапуском сервера"
         a.finished_at = datetime.now(timezone.utc)
+
+    running_baselines = list(
+        db.scalars(
+            select(AnalysisResult).where(AnalysisResult.baseline_status == "running")
+        )
+    )
+    for ar in running_baselines:
+        ar.baseline_status = "failed"
+        ar.baseline_error = "Прервано перезапуском сервера"
+
     db.commit()
-    return len(running)
+    return len(running) + len(running_baselines)

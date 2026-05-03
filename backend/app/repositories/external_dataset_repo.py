@@ -24,7 +24,6 @@ HNSW-индекс на `embedding`).
 """
 from __future__ import annotations
 
-import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -33,25 +32,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.models.external_dataset import ExternalDataset
-
-
-def _jsonb_safe(value: Any) -> Any:
-    """
-    Рекурсивно заменяет NaN/Infinity на None в произвольной dict/list-структуре.
-
-    PostgreSQL JSONB не принимает NaN/Infinity (это нестандарт JSON), а профайлер
-    может выдавать их в `correlation_matrix` для пар колонок без определённой
-    корреляции (например, когда одна колонка константна — pandas возвращает
-    NaN в r). Без очистки seed-скрипт падает с
-    `psycopg.errors.InvalidTextRepresentation: Token "NaN" is invalid`.
-    """
-    if isinstance(value, float):
-        return None if not math.isfinite(value) else value
-    if isinstance(value, dict):
-        return {k: _jsonb_safe(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_jsonb_safe(v) for v in value]
-    return value
+from app.utils.jsonb import jsonb_safe
 
 
 # Whitelist операторов pgvector — повторная защита перед raw SQL. Должен
@@ -93,9 +74,9 @@ def upsert_external_dataset(
     now = datetime.now(timezone.utc)
     sanitized = {**fields}
     if "meta_features" in sanitized:
-        sanitized["meta_features"] = _jsonb_safe(sanitized["meta_features"])
+        sanitized["meta_features"] = jsonb_safe(sanitized["meta_features"])
     if "tags" in sanitized:
-        sanitized["tags"] = _jsonb_safe(sanitized["tags"])
+        sanitized["tags"] = jsonb_safe(sanitized["tags"])
     insert_values = {**sanitized, "created_at": now, "updated_at": now}
 
     set_on_conflict: dict[str, Any] = {
