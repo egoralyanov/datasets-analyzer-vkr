@@ -47,3 +47,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*", "seeds*"]
+
+[tool.pytest.ini_options]
+# /app в sys.path — чтобы тесты могли импортировать `ml.*` (каталог backend/ml/
+# не пакетируется в site-packages, но виден как локальный модуль из cwd).
+pythonpath = ["."]
