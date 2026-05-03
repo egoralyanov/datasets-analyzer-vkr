@@ -66,6 +66,76 @@ export type AnalysisResult = {
   analysis: Analysis;
   meta_features: MetaFeatures;
   flags: QualityFlag[];
+  task_recommendation: TaskRecommendation | null;
+  embedding: number[] | null;
+};
+
+// Зеркала Pydantic-схем из backend/app/schemas/task_recommendation.py
+// и backend/app/schemas/baseline.py.
+
+export type TaskTypeCode =
+  | "BINARY_CLASSIFICATION"
+  | "MULTICLASS_CLASSIFICATION"
+  | "REGRESSION"
+  | "CLUSTERING"
+  | "NOT_READY";
+
+export type RecommendationSource = "rules" | "ml" | "hybrid";
+
+export type AppliedRule = {
+  code: string;
+  description: string;
+};
+
+export type TaskRecommendation = {
+  task_type_code: TaskTypeCode;
+  confidence: number;
+  source: RecommendationSource;
+  applied_rules: AppliedRule[];
+  ml_probabilities: Record<string, number> | null;
+  explanation: string;
+};
+
+// `mean ± std` пара по фолдам кросс-валидации.
+export type MetricValue = {
+  mean: number;
+  std: number;
+};
+
+export type BaselineResult = {
+  models: string[];
+  metrics: Record<string, Record<string, MetricValue>>;
+  feature_importance: Record<string, number>;
+  excluded_columns_due_to_leakage: string[];
+  n_rows_used: number;
+  n_features_used: number;
+  trained_at: string;
+  // Для CLUSTERING / NOT_READY backend кладёт текстовое объяснение
+  // вместо обученных моделей.
+  note?: string;
+};
+
+export type BaselineStatus = "not_started" | "running" | "done" | "failed";
+
+export type BaselineResponse = {
+  baseline_status: BaselineStatus;
+  baseline: BaselineResult | null;
+  baseline_error: string | null;
+};
+
+export type BaselineStartResponse = {
+  analysis_id: string;
+  baseline_status: "running" | "done";
+};
+
+export type SimilarDataset = {
+  id: string;
+  title: string;
+  description: string | null;
+  source: string;
+  source_url: string | null;
+  task_type_code: string;
+  distance: number;
 };
 
 export type StartAnalysisRequest = {

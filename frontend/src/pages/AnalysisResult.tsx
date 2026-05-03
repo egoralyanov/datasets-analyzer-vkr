@@ -8,6 +8,9 @@ import { useAnalysisPolling } from "../hooks/useAnalysisPolling";
 import { DatasetSummary } from "../components/analysis/DatasetSummary";
 import { QualityFlags } from "../components/analysis/QualityFlags";
 import { Distributions } from "../components/analysis/Distributions";
+import { TaskRecommendationCard } from "../components/analysis/TaskRecommendationCard";
+import { SimilarDatasetsCard } from "../components/analysis/SimilarDatasetsCard";
+import { BaselineCard } from "../components/analysis/BaselineCard";
 
 export function AnalysisResult() {
   const { id } = useParams<{ id: string }>();
@@ -82,6 +85,14 @@ export function AnalysisResult() {
           />
           <QualityFlags flags={result.data.flags} />
           <Distributions meta={result.data.meta_features} />
+          <TaskRecommendationCard
+            recommendation={result.data.task_recommendation}
+          />
+          <SimilarDatasetsCard analysisId={id} />
+          <BaselineCard
+            analysisId={id}
+            taskType={result.data.task_recommendation?.task_type_code}
+          />
         </div>
       )}
 
