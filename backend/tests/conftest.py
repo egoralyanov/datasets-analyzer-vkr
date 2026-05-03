@@ -22,8 +22,30 @@ from app.core.db import SessionLocal, engine
 from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.models.user import User
+from ml.train_meta_classifier import (
+    CLASSIFIER_PATH as META_CLASSIFIER_PATH,
+)
+from ml.train_meta_classifier import SCALER_PATH, train_meta_classifier
 from seeds.seed_external_datasets import seed as seed_external_datasets
 from seeds.seed_quality_rules import seed as seed_quality_rules
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_meta_classifier_trained() -> None:
+    """
+    Гарантирует наличие meta_classifier.pkl + scaler.pkl до запуска тестов.
+
+    Файлы лежат в `backend/ml/models/`, не коммитятся в git (см. .gitignore) —
+    переобучаются из закоммиченных `real_set.json` + `synthetic_set.json`.
+    Без модели рекомендатер деградирует к чистым правилам, а тесты на
+    `source="hybrid"` теряют смысл. Также matcher без scaler не считает
+    embedding для пользовательских анализов.
+
+    Время обучения — ~30 секунд, выполняется один раз на pytest-сессию.
+    """
+    if META_CLASSIFIER_PATH.exists() and SCALER_PATH.exists():
+        return
+    train_meta_classifier()
 
 
 @pytest.fixture(scope="session", autouse=True)
