@@ -32,6 +32,10 @@ dependencies = [
     "scikit-learn>=1.4",
     # Сериализация мета-классификатора и StandardScaler (Спринт 3)
     "joblib>=1.3",
+    # Серверный рендер графиков для PDF-отчётов (Спринт 4): matplotlib работает
+    # в Agg-backend без X-сервера и поддерживает кириллицу через DejaVu Sans
+    # (шрифт ставится в Dockerfile со Спринта 0).
+    "matplotlib>=3.9,<4.0",
 ]
 
 [project.optional-dependencies]
