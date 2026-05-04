@@ -274,6 +274,35 @@ def test_render_html_replaces_none_meta_with_dash() -> None:
     assert ">None<" not in html
 
 
+def test_generate_report_handles_pgvector_embedding(
+    report_chain: Callable[..., Report],
+    db_session: Session,
+) -> None:
+    """
+    Регрессия: result.embedding из pgvector — numpy.ndarray, и
+    `if not embedding` падает с «truth value of an array … is ambiguous».
+    Перед передачей в _build_similar_view приводим к list[float].
+    """
+    report = report_chain()
+    # Подсовываем embedding в результат анализа — так orchestrator пойдёт
+    # по ветке поиска похожих, что и ловило баг до фикса.
+    result = db_session.get(AnalysisResult, report.analysis_id)
+    assert result is not None
+    result.embedding = [0.0] * 128
+    db_session.commit()
+
+    report_service.generate_report(report.id, SessionLocal)
+
+    db_session.expire_all()
+    saved = db_session.get(Report, report.id)
+    assert saved is not None
+    assert saved.status == "success", f"unexpected status={saved.status} error={saved.error!r}"
+
+    pdf_path = Path(settings.REPORTS_DIR) / saved.file_path
+    pdf_path.unlink(missing_ok=True)
+    pdf_path.parent.rmdir()
+
+
 def test_generate_report_failure_records_status_and_error(
     report_chain: Callable[..., Report],
     db_session: Session,

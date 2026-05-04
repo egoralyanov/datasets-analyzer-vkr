@@ -393,7 +393,15 @@ def generate_report(
             )
         )
         quality_flags = _resolve_quality_flags(db, flags_orm)
-        similar_datasets = _build_similar_view(db, result.embedding)
+        # pgvector хранит embedding как numpy.ndarray — приводим к list[float],
+        # иначе `if not embedding` внутри _build_similar_view упирается в
+        # «The truth value of an array with more than one element is ambiguous».
+        embedding_list: list[float] | None = (
+            [float(v) for v in result.embedding]
+            if result.embedding is not None
+            else None
+        )
+        similar_datasets = _build_similar_view(db, embedding_list)
 
         # 3) Контекст → HTML → PDF.
         context = _build_context(

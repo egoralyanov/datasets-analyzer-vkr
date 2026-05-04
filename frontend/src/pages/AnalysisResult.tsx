@@ -11,6 +11,7 @@ import { Distributions } from "../components/analysis/Distributions";
 import { TaskRecommendationCard } from "../components/analysis/TaskRecommendationCard";
 import { SimilarDatasetsCard } from "../components/analysis/SimilarDatasetsCard";
 import { BaselineCard } from "../components/analysis/BaselineCard";
+import { ReportDownloadCard } from "../components/analysis/ReportDownloadCard";
 
 export function AnalysisResult() {
   const { id } = useParams<{ id: string }>();
@@ -92,6 +93,10 @@ export function AnalysisResult() {
           <BaselineCard
             analysisId={id}
             taskType={result.data.task_recommendation?.task_type_code}
+          />
+          <ReportDownloadCard
+            analysisId={id}
+            analysisStatus={analysis.status}
           />
         </div>
       )}
