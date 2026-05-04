@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from typing import Literal
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -32,6 +34,8 @@ from app.models.user import User
 from app.repositories import analysis_repo, dataset_repo
 from app.repositories.quality_flag_repo import get_flags_for_analysis
 from app.schemas.analysis import (
+    AnalysisListItem,
+    AnalysisListResponse,
     AnalysisResponse,
     AnalysisResultResponse,
     QualityFlagResponse,
@@ -110,14 +114,53 @@ def start_analysis(
     return AnalysisResponse.model_validate(analysis)
 
 
-@router.get("/analyses", response_model=list[AnalysisResponse])
+@router.get("/analyses", response_model=AnalysisListResponse)
 def list_my_analyses(
+    page: int = Query(1, ge=1, description="Номер страницы (с 1)"),
+    size: int = Query(20, ge=1, le=100, description="Размер страницы (1..100)"),
+    status_filter: Literal["pending", "running", "done", "failed"] | None = Query(
+        None,
+        alias="status",
+        description="Опциональный фильтр по статусу",
+    ),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[AnalysisResponse]:
-    """Все свои анализы в порядке от свежих к старым."""
-    items = analysis_repo.list_analyses(db, current_user.id)
-    return [AnalysisResponse.model_validate(a) for a in items]
+) -> AnalysisListResponse:
+    """
+    Пагинированный список анализов пользователя.
+
+    Сортировка started_at DESC, joinedload подтягивает Dataset и
+    AnalysisResult в одном запросе — без N+1. Контракт ответа:
+    {items, total, page, size, pages} — стандартный для пагинированных
+    списков.
+    """
+    items, total = analysis_repo.list_user_analyses_paginated(
+        db, current_user.id, page=page, size=size, status=status_filter,
+    )
+    pages = (total + size - 1) // size if total else 0
+    return AnalysisListResponse(
+        items=[
+            AnalysisListItem(
+                id=a.id,
+                dataset_id=a.dataset_id,
+                dataset_name=a.dataset.original_filename if a.dataset else "—",
+                status=a.status,
+                target_column=a.target_column,
+                recommended_task_type=(
+                    a.result.task_recommendation.get("task_type_code")
+                    if a.result and a.result.task_recommendation
+                    else None
+                ),
+                started_at=a.started_at,
+                finished_at=a.finished_at,
+            )
+            for a in items
+        ],
+        total=total,
+        page=page,
+        size=size,
+        pages=pages,
+    )
 
 
 @router.get("/analyses/{analysis_id}", response_model=AnalysisResponse)

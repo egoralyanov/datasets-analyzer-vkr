@@ -17,6 +17,10 @@ const AnalysisResult = lazy(() =>
   import("./pages/AnalysisResult").then((m) => ({ default: m.AnalysisResult })),
 );
 
+// History — лёгкая страница со списком; lazy ради единого паттерна
+// code-splitting (как у AnalysisResult), main bundle от неё не растёт.
+const History = lazy(() => import("./pages/History"));
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -30,6 +34,14 @@ export default function App() {
             <Route element={<RequireAuth />}>
               <Route path="/upload" element={<Upload />} />
               <Route path="/profile" element={<Profile />} />
+              <Route
+                path="/history"
+                element={
+                  <Suspense fallback={<RouteSpinner />}>
+                    <History />
+                  </Suspense>
+                }
+              />
               <Route
                 path="/analyses/:id"
                 element={

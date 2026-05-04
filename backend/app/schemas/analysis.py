@@ -45,6 +45,35 @@ class QualityFlagResponse(BaseModel):
     context: dict[str, Any] | None
 
 
+class AnalysisListItem(BaseModel):
+    """Облегчённая запись для страницы «История анализов».
+
+    Не путать с `AnalysisResponse` — там более полная модель для polling
+    одного анализа. Здесь только то, что нужно для строки списка:
+    идентификаторы, имя файла датасета (через joinedload), статус,
+    рекомендованный тип задачи (если уже посчитан) и временные метки.
+    """
+
+    id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_name: str
+    status: str
+    target_column: str | None
+    recommended_task_type: str | None
+    started_at: datetime
+    finished_at: datetime | None
+
+
+class AnalysisListResponse(BaseModel):
+    """Пагинированный ответ GET /api/analyses."""
+
+    items: list[AnalysisListItem]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
 class AnalysisResultResponse(BaseModel):
     """Полный результат анализа: meta-features + флаги + рекомендация + embedding.
 

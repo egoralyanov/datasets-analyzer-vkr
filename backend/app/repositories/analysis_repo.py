@@ -5,8 +5,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.analysis import Analysis
 from app.models.analysis_result import AnalysisResult
@@ -72,6 +72,60 @@ def list_analyses(db: Session, user_id: uuid.UUID) -> list[Analysis]:
             .order_by(Analysis.started_at.desc())
         )
     )
+
+
+def list_user_analyses_paginated(
+    db: Session,
+    user_id: uuid.UUID,
+    *,
+    page: int,
+    size: int,
+    status: str | None = None,
+) -> tuple[list[Analysis], int]:
+    """
+    Пагинированный список анализов пользователя для страницы «История».
+
+    `joinedload(Analysis.dataset)` нужен для отрисовки имени файла в строке
+    списка без N+1 SELECT на каждый элемент. `joinedload(Analysis.result)`
+    подтягивает task_recommendation для отображения рекомендованного типа
+    задачи; result у анализа в pending/running ещё не существует, поэтому
+    LEFT-JOIN, а не INNER.
+
+    Сортировка `started_at DESC` — самые свежие сверху. created_at в модели
+    отсутствует (поле ввели в analyses ещё в Спринте 1 как started_at).
+
+    Args:
+        page: номер страницы, начинается с 1.
+        size: размер страницы.
+        status: фильтр по статусу анализа (pending/running/done/failed)
+            или None — все статусы.
+
+    Returns:
+        Кортеж `(items, total)` — срез страницы и общее число анализов
+        пользователя (с применённым фильтром по status, если задан).
+        Поле `pages = ceil(total / size)` вычисляется на уровне API.
+    """
+    base_filters = [Analysis.user_id == user_id]
+    if status is not None:
+        base_filters.append(Analysis.status == status)
+
+    total = db.scalar(
+        select(func.count()).select_from(Analysis).where(*base_filters)
+    ) or 0
+
+    items_stmt = (
+        select(Analysis)
+        .where(*base_filters)
+        .options(
+            joinedload(Analysis.dataset),
+            joinedload(Analysis.result),
+        )
+        .order_by(Analysis.started_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    items = list(db.scalars(items_stmt).unique())
+    return items, total
 
 
 def update_status(

@@ -13,6 +13,27 @@ export type Analysis = {
   error_message: string | null;
 };
 
+// Облегчённая запись для страницы /history (см. AnalysisListItem на бэке).
+// Не путать с Analysis — там более полная модель для polling одного анализа.
+export type AnalysisListItem = {
+  id: string;
+  dataset_id: string;
+  dataset_name: string;
+  status: AnalysisStatus;
+  target_column: string | null;
+  recommended_task_type: string | null;
+  started_at: string;
+  finished_at: string | null;
+};
+
+export type AnalysisListResponse = {
+  items: AnalysisListItem[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+};
+
 export type QualityFlag = {
   rule_code: string;
   severity: Severity;

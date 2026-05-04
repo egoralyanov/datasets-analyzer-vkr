@@ -35,6 +35,12 @@ export function Header() {
                 Мои датасеты
               </Link>
               <Link
+                to="/history"
+                className="text-sm text-slate-700 hover:text-slate-900"
+              >
+                История
+              </Link>
+              <Link
                 to="/profile"
                 className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
               >

@@ -274,11 +274,11 @@ def test_list_analyses_returns_only_own(
 
     list_a = client.get("/api/analyses", headers=headers_a).json()
     list_b = client.get("/api/analyses", headers=headers_b).json()
-    assert len(list_a) == 2
-    assert len(list_b) == 1
+    assert list_a["total"] == 2
+    assert list_b["total"] == 1
     # Никаких пересечений ID.
-    ids_a = {a["id"] for a in list_a}
-    ids_b = {a["id"] for a in list_b}
+    ids_a = {a["id"] for a in list_a["items"]}
+    ids_b = {a["id"] for a in list_b["items"]}
     assert ids_a.isdisjoint(ids_b)
 
 
