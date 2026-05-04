@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -407,14 +408,21 @@ def generate_report(
         html = _render_html(context)
         pdf_bytes = _render_pdf_bytes(html)
 
-        # 4) Сохранение файла. Каталог по пользователю, чтобы не упереться
-        # в число inode'ов на одной директории.
+        # 4) Сохранение файла через tmp+rename для транзакционности.
+        # Сначала пишем в *.pdf.tmp, затем атомарно переименовываем в *.pdf —
+        # это гарантирует, что на диске не появится «полу-PDF» при сбое
+        # записи. os.replace выполняется ДО db.commit финального статуса:
+        # если rename упадёт (нет места на диске и т.п.), исключение пойдёт
+        # в общий except и статус станет failed, а БД не будет рассинхронна
+        # с файлом-orphan.
         reports_root = Path(settings.REPORTS_DIR)
         user_dir = reports_root / str(user.id)
         user_dir.mkdir(parents=True, exist_ok=True)
         relative_path = f"{user.id}/{report.id}.pdf"
-        absolute_path = reports_root / relative_path
-        absolute_path.write_bytes(pdf_bytes)
+        final_path = reports_root / relative_path
+        tmp_path = final_path.with_suffix(".pdf.tmp")
+        tmp_path.write_bytes(pdf_bytes)
+        os.replace(tmp_path, final_path)
 
         # 5) Финальный статус.
         report.status = "success"
@@ -428,6 +436,21 @@ def generate_report(
     except Exception as exc:  # noqa: BLE001 — финализируем status=failed
         logger.exception("generate_report failed for report_id=%s", report_id)
         db.rollback()
+        # Чистим .tmp если он успел появиться, чтобы не оставлять orphan'ов
+        # на диске. Финального .pdf после rename'а здесь по построению нет —
+        # либо rename прошёл и мы вышли из try выше, либо упал и этой
+        # ветке tmp ещё лежит на месте.
+        try:
+            tmp_candidate = (
+                Path(settings.REPORTS_DIR)
+                / str(report.user_id)
+                / f"{report.id}.pdf.tmp"
+            ) if report is not None else None
+            if tmp_candidate is not None and tmp_candidate.exists():
+                tmp_candidate.unlink(missing_ok=True)
+        except Exception:
+            logger.exception("Failed to clean tmp file after error")
+
         if report is None:
             return
         try:
