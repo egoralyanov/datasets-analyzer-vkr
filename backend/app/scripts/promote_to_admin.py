@@ -42,6 +42,11 @@ def promote(email: str) -> int:
         user.role = "admin"
         db.commit()
         print(f"OK: user {email} promoted to admin")
+        # JWT в активной сессии содержит старую роль; authStore на фронте
+        # держит снимок user из login-response. Бэкенд читает свежую роль
+        # из БД на каждом запросе, но UI-навигация (пункт «Админ» в шапке)
+        # обновится только после перелогина.
+        print("Готово. Для применения изменений в UI выполните logout/login.")
         return 0
     finally:
         db.close()

@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { Header } from "./components/layout/Header";
 import { ServerStatus } from "./components/ServerStatus";
 import { RequireAuth } from "./components/layout/RequireAuth";
+import { RequireAdmin } from "./components/layout/RequireAdmin";
 import { Landing } from "./pages/Landing";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
@@ -20,6 +21,9 @@ const AnalysisResult = lazy(() =>
 // History — лёгкая страница со списком; lazy ради единого паттерна
 // code-splitting (как у AnalysisResult), main bundle от неё не растёт.
 const History = lazy(() => import("./pages/History"));
+
+// Admin: защищённая страница, грузим только когда открыта.
+const Admin = lazy(() => import("./pages/Admin"));
 
 export default function App() {
   return (
@@ -50,6 +54,16 @@ export default function App() {
                   </Suspense>
                 }
               />
+              <Route element={<RequireAdmin />}>
+                <Route
+                  path="/admin"
+                  element={
+                    <Suspense fallback={<RouteSpinner />}>
+                      <Admin />
+                    </Suspense>
+                  }
+                />
+              </Route>
             </Route>
           </Routes>
         </main>

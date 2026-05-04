@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import analyses, auth, datasets, health, reports
+from app.api import admin, analyses, auth, datasets, health, reports
 from app.config import settings
 from app.core.db import SessionLocal
 from app.repositories.analysis_repo import reset_running_to_failed
@@ -53,3 +53,4 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(datasets.router, prefix="/api")
 app.include_router(analyses.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")

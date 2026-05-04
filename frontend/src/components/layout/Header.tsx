@@ -40,6 +40,14 @@ export function Header() {
               >
                 История
               </Link>
+              {user.role === "admin" && (
+                <Link
+                  to="/admin"
+                  className="text-sm text-slate-700 hover:text-slate-900"
+                >
+                  Админ
+                </Link>
+              )}
               <Link
                 to="/profile"
                 className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
