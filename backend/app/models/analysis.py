@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.models.analysis_result import AnalysisResult
     from app.models.dataset import Dataset
     from app.models.quality_flag import QualityFlag
+    from app.models.report import Report
     from app.models.user import User
 
 
@@ -62,5 +63,8 @@ class Analysis(Base):
         back_populates="analysis", cascade="all, delete-orphan", uselist=False
     )
     flags: Mapped[list["QualityFlag"]] = relationship(
+        back_populates="analysis", cascade="all, delete-orphan"
+    )
+    reports: Mapped[list["Report"]] = relationship(
         back_populates="analysis", cascade="all, delete-orphan"
     )

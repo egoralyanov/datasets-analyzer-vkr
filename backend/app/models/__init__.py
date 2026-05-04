@@ -5,6 +5,7 @@ from app.models.dataset import Dataset
 from app.models.external_dataset import ExternalDataset
 from app.models.quality_flag import QualityFlag
 from app.models.quality_rule import QualityRule
+from app.models.report import Report
 from app.models.user import User
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "ExternalDataset",
     "QualityFlag",
     "QualityRule",
+    "Report",
     "User",
 ]

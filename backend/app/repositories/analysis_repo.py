@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
 from app.models.analysis_result import AnalysisResult
+from app.models.report import Report
 
 
 def create_analysis(
@@ -137,18 +138,22 @@ def save_analysis_result(
 
 def reset_running_to_failed(db: Session) -> int:
     """
-    Переводит «зависшие» анализы и baseline-обучения в статус failed.
+    Переводит «зависшие» анализы, baseline-обучения и генерации отчётов в failed.
 
     Вызывается при старте приложения: BackgroundTasks живут в памяти процесса,
     при перезапуске контейнера они теряются, но запись в БД остаётся
-    «зависшей» в running. Сбрасываем сразу два статуса:
+    «зависшей» в running. Сбрасываем три потока:
     1. `analyses.status='running'` → `'failed'` с error_message;
-    2. `analysis_results.baseline_status='running'` → `'failed'` с baseline_error.
+    2. `analysis_results.baseline_status='running'` → `'failed'` с baseline_error;
+    3. `reports.status` ∈ {`pending`, `running`} → `'failed'` с error.
+       Для отчётов сбрасываем и pending тоже: запись pending создаётся
+       синхронно перед `add_task`, и если контейнер падает между INSERT'ом
+       и стартом задачи — pending без задачи навсегда зависнет в очереди.
 
     См. .knowledge/troubleshooting.md, раздел про BackgroundTask.
 
     Returns:
-        Суммарное число переведённых записей (analyses + baselines).
+        Суммарное число переведённых записей (analyses + baselines + reports).
     """
     running = list(db.scalars(select(Analysis).where(Analysis.status == "running")))
     for a in running:
@@ -165,5 +170,14 @@ def reset_running_to_failed(db: Session) -> int:
         ar.baseline_status = "failed"
         ar.baseline_error = "Прервано перезапуском сервера"
 
+    running_reports = list(
+        db.scalars(
+            select(Report).where(Report.status.in_(("pending", "running")))
+        )
+    )
+    for rp in running_reports:
+        rp.status = "failed"
+        rp.error = "Прервано перезапуском сервера"
+
     db.commit()
-    return len(running) + len(running_baselines)
+    return len(running) + len(running_baselines) + len(running_reports)

@@ -20,6 +20,7 @@ from app.core.db import Base
 if TYPE_CHECKING:
     from app.models.analysis import Analysis
     from app.models.dataset import Dataset
+    from app.models.report import Report
 
 
 class User(Base):
@@ -45,5 +46,8 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     analyses: Mapped[list["Analysis"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    reports: Mapped[list["Report"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
