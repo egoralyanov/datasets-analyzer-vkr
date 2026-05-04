@@ -36,6 +36,11 @@ dependencies = [
     # в Agg-backend без X-сервера и поддерживает кириллицу через DejaVu Sans
     # (шрифт ставится в Dockerfile со Спринта 0).
     "matplotlib>=3.9,<4.0",
+    # PDF-отчёты (Спринт 4): WeasyPrint конвертирует HTML+CSS в PDF через
+    # Pango/Cairo, Jinja2 — шаблонизатор. Системные библиотеки Pango,
+    # Cairo, HarfBuzz и шрифты DejaVu установлены в Dockerfile со Спринта 0.
+    "weasyprint>=65,<69",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]

@@ -20,6 +20,7 @@ from app.services.chart_renderer import (
     _select_top_correlations,
     render_categorical_bar,
     render_correlation_heatmap,
+    render_distribution_from_bins,
     render_distribution_histogram,
     render_target_classification,
     render_target_regression,
@@ -35,6 +36,15 @@ def test_distribution_histogram_returns_valid_png() -> None:
     assert isinstance(png, bytes)
     assert png[:8] == PNG_SIGNATURE
     assert len(png) > 1024  # реальный PNG крупнее минимально-валидного
+
+
+def test_distribution_from_bins_returns_valid_png() -> None:
+    """Pre-binned гистограмма из 10 бинов (11 рёбер + 10 счётчиков)."""
+    bin_edges = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+    counts = [3, 7, 12, 18, 22, 20, 15, 9, 4, 1]
+    png = render_distribution_from_bins(bin_edges, counts, "age")
+    assert png[:8] == PNG_SIGNATURE
+    assert len(png) > 1024
 
 
 def test_categorical_bar_top_n_with_other_bucket() -> None:

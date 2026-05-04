@@ -1,0 +1,179 @@
+/*
+ * Стили PDF-отчёта.
+ *
+ * Используется CSS Paged Media (модуль W3C для печати): @page для размера
+ * листа и колонтитулов, page-break-* для управления разрывами. Шрифт DejaVu
+ * Sans подхватывается системно через fonts-dejavu — @font-face не объявляем
+ * (Pango найдёт шрифт по имени).
+ */
+
+@page {
+    size: A4;
+    margin: 2cm;
+    @bottom-right {
+        content: "Стр. " counter(page) " / " counter(pages);
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 9pt;
+        color: #64748b;
+    }
+}
+
+html {
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 11pt;
+    color: #0f172a;
+}
+
+body {
+    margin: 0;
+    line-height: 1.4;
+}
+
+h1, h2, h3, h4 {
+    font-weight: 600;
+    color: #0f172a;
+    page-break-after: avoid;
+}
+
+h1 {
+    font-size: 22pt;
+    margin: 0 0 0.4cm 0;
+}
+
+h2 {
+    font-size: 15pt;
+    margin: 0.8cm 0 0.3cm 0;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 0.15cm;
+}
+
+h3 {
+    font-size: 12pt;
+    margin: 0.5cm 0 0.2cm 0;
+}
+
+p {
+    margin: 0.2cm 0;
+}
+
+ul, ol {
+    margin: 0.2cm 0;
+    padding-left: 0.7cm;
+}
+
+.muted {
+    color: #64748b;
+    font-size: 10pt;
+}
+
+.report-title {
+    text-align: left;
+}
+
+.title-meta {
+    margin-top: 0.2cm;
+    color: #475569;
+    font-size: 10.5pt;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.3cm 0;
+    page-break-inside: avoid;
+}
+
+th, td {
+    border: 1px solid #e2e8f0;
+    padding: 4pt 6pt;
+    text-align: left;
+    vertical-align: top;
+    font-size: 10pt;
+}
+
+th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+}
+
+.kv-table th {
+    width: 40%;
+}
+
+.flag {
+    margin: 0.15cm 0;
+    padding: 0.2cm 0.3cm;
+    border-left: 4px solid #cbd5e1;
+    background-color: #f8fafc;
+    page-break-inside: avoid;
+}
+
+.flag-critical { border-left-color: #dc2626; background-color: #fef2f2; }
+.flag-warning  { border-left-color: #ea580c; background-color: #fff7ed; }
+.flag-info     { border-left-color: #2563eb; background-color: #eff6ff; }
+
+.flag-code {
+    font-weight: 600;
+    margin-right: 0.2cm;
+}
+
+.chart {
+    text-align: center;
+    margin: 0.3cm 0;
+    page-break-inside: avoid;
+}
+
+.chart img {
+    max-width: 16cm;
+    height: auto;
+}
+
+.chart-grid {
+    display: block;
+}
+
+.section {
+    page-break-inside: avoid;
+}
+
+.recommendation-explanation {
+    background-color: #f8fafc;
+    border-left: 4px solid #2563eb;
+    padding: 0.25cm 0.4cm;
+    margin: 0.25cm 0;
+    font-size: 10.5pt;
+}
+
+.feature-importance-row {
+    display: flex;
+    align-items: center;
+    margin: 1pt 0;
+    font-size: 10pt;
+}
+
+.feature-importance-name {
+    width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 0.2cm;
+}
+
+.feature-importance-bar-wrap {
+    flex: 1;
+    background-color: #e2e8f0;
+    height: 8pt;
+    position: relative;
+}
+
+.feature-importance-bar {
+    background-color: #2563eb;
+    height: 100%;
+}
+
+.feature-importance-value {
+    width: 4em;
+    text-align: right;
+    padding-left: 0.2cm;
+    color: #475569;
+}

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="report.css">
+</head>
+<body>
+
+{# === Секция: Титул === #}
+<header class="report-title">
+    <h1>{{ title }}</h1>
+    <p class="title-meta">
+        Автор: {{ user.username }}<br>
+        Файл: {{ dataset.original_filename }}<br>
+        Дата генерации: {{ generated_at }}<br>
+        Идентификатор отчёта: <span class="muted">{{ report_id }}</span>
+    </p>
+</header>
+
+{# === Секция: Сводка датасета === #}
+<section class="section">
+    <h2>Сводка датасета</h2>
+    <table class="kv-table">
+        <tr><th>Количество строк</th><td>{{ summary.n_rows }}</td></tr>
+        <tr><th>Количество столбцов</th><td>{{ summary.n_cols }}</td></tr>
+        <tr><th>Целевая переменная</th>
+            <td>{{ analysis.target_column | default("—", true) }}</td></tr>
+        <tr><th>Доля пропусков (всего)</th>
+            <td>{{ "%.2f" | format(summary.total_missing_pct * 100) }}%</td></tr>
+        <tr><th>Макс. доля пропусков по колонке</th>
+            <td>{{ "%.2f" | format(summary.max_col_missing_pct * 100) }}%</td></tr>
+    </table>
+
+    {% if summary.dtype_counts %}
+    <h3>Типы столбцов</h3>
+    <table>
+        <thead><tr><th>Тип</th><th>Количество колонок</th></tr></thead>
+        <tbody>
+        {% for dtype, n in summary.dtype_counts.items() %}
+            <tr><td>{{ dtype }}</td><td>{{ n }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if target_info.kind %}
+    <h3>Целевая переменная</h3>
+    <table class="kv-table">
+        <tr><th>Тип</th>
+            <td>{{ "категориальная" if target_info.kind == "categorical" else "числовая" }}</td></tr>
+        {% if target_info.n_unique is not none %}
+        <tr><th>Уникальных значений</th><td>{{ target_info.n_unique }}</td></tr>
+        {% endif %}
+        {% if target_info.imbalance_ratio is not none %}
+        <tr><th>Коэффициент дисбаланса</th>
+            <td>{{ "%.3f" | format(target_info.imbalance_ratio) }}</td></tr>
+        {% endif %}
+        {% if target_info.class_entropy is not none %}
+        <tr><th>Энтропия классов</th>
+            <td>{{ "%.3f" | format(target_info.class_entropy) }}</td></tr>
+        {% endif %}
+        {% if target_info.skewness is not none %}
+        <tr><th>Скошенность</th>
+            <td>{{ "%.3f" | format(target_info.skewness) }}</td></tr>
+        {% endif %}
+    </table>
+    {% endif %}
+</section>
+
+{# === Секция: Флаги качества === #}
+<section class="section">
+    <h2>Качество данных</h2>
+    {% if quality_flags %}
+        {% for flag in quality_flags %}
+        <div class="flag flag-{{ flag.severity }}">
+            <span class="flag-code">{{ flag.code }}</span>
+            {{ flag.message }}
+            {% if flag.column_name %}<span class="muted"> · колонка «{{ flag.column_name }}»</span>{% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="muted">Проверки качества не выявили проблем.</p>
+    {% endif %}
+</section>
+
+{# === Секция: Распределения и графики === #}
+<section class="section">
+    <h2>Распределения</h2>
+
+    {% if charts.target_chart %}
+    <h3>Распределение целевой переменной</h3>
+    <div class="chart">
+        <img src="data:image/png;base64,{{ charts.target_chart | b64 }}"
+             alt="Распределение целевой переменной">
+    </div>
+    {% endif %}
+
+    {% if charts.numeric_histograms %}
+    <h3>Числовые признаки</h3>
+    <div class="chart-grid">
+        {% for item in charts.numeric_histograms %}
+        <div class="chart">
+            <img src="data:image/png;base64,{{ item.png | b64 }}"
+                 alt="Гистограмма {{ item.col_name }}">
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if charts.categorical_bars %}
+    <h3>Категориальные признаки</h3>
+    <div class="chart-grid">
+        {% for item in charts.categorical_bars %}
+        <div class="chart">
+            <img src="data:image/png;base64,{{ item.png | b64 }}"
+                 alt="Распределение {{ item.col_name }}">
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if charts.correlation_heatmap %}
+    <h3>Матрица корреляций</h3>
+    <div class="chart">
+        <img src="data:image/png;base64,{{ charts.correlation_heatmap | b64 }}"
+             alt="Корреляционная матрица">
+    </div>
+    {% endif %}
+</section>
+
+{# === Секция: Рекомендация типа задачи === #}
+{% if task_recommendation %}
+<section class="section">
+    <h2>Рекомендация по типу задачи</h2>
+    <table class="kv-table">
+        <tr><th>Тип задачи</th>
+            <td>{{ task_recommendation.task_type_code }}</td></tr>
+        <tr><th>Уверенность</th>
+            <td>{{ "%.0f" | format(task_recommendation.confidence * 100) }}%</td></tr>
+        <tr><th>Источник</th>
+            <td>{{ task_recommendation.source }}</td></tr>
+    </table>
+
+    {% if task_recommendation.applied_rules %}
+    <h3>Применённые правила</h3>
+    <ul>
+        {% for rule in task_recommendation.applied_rules %}
+        <li>{{ rule }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if task_recommendation.explanation %}
+    <div class="recommendation-explanation">
+        {{ task_recommendation.explanation }}
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
+{# === Секция: Похожие датасеты === #}
+{% if similar_datasets %}
+<section class="section">
+    <h2>Похожие датасеты</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Тип задачи</th>
+                <th>Источник</th>
+                <th>Сходство</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ds in similar_datasets %}
+            <tr>
+                <td>{{ ds.title }}</td>
+                <td>{{ ds.task_type_code }}</td>
+                <td>{{ ds.source | default("—", true) }}</td>
+                <td>{{ "%.3f" | format(ds.similarity) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{# === Секция: Базовая модель (baseline) === #}
+{% if baseline %}
+<section class="section">
+    <h2>Базовая модель</h2>
+    <table class="kv-table">
+        <tr><th>Использовано строк</th><td>{{ baseline.n_rows_used }}</td></tr>
+        <tr><th>Использовано признаков</th><td>{{ baseline.n_features_used }}</td></tr>
+    </table>
+
+    {% if baseline.excluded_columns_due_to_leakage %}
+    <h3>Исключены из-за подозрения на утечку</h3>
+    <ul>
+        {% for col in baseline.excluded_columns_due_to_leakage %}
+        <li>{{ col }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if baseline.metrics %}
+    <h3>Метрики (среднее ± std по 5-fold CV)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Модель</th>
+                {% for metric_name in baseline.metric_names %}
+                <th>{{ metric_name }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for model_name in baseline.models %}
+            <tr>
+                <td>{{ model_name }}</td>
+                {% for metric_name in baseline.metric_names %}
+                {% set cell = baseline.metrics.get(model_name, {}).get(metric_name) %}
+                <td>
+                    {% if cell %}
+                        {{ "%.3f" | format(cell.mean) }} ± {{ "%.3f" | format(cell.std) }}
+                    {% else %}—{% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if baseline.feature_importance %}
+    <h3>Важность признаков (топ-10)</h3>
+    {% for fname, importance in baseline.feature_importance_top %}
+    <div class="feature-importance-row">
+        <div class="feature-importance-name">{{ fname }}</div>
+        <div class="feature-importance-bar-wrap">
+            <div class="feature-importance-bar"
+                 style="width: {{ (importance / baseline.feature_importance_max * 100) | round(1) }}%"></div>
+        </div>
+        <div class="feature-importance-value">{{ "%.3f" | format(importance) }}</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</section>
+{% endif %}
+
+</body>
+</html>

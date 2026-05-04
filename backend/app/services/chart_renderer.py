@@ -124,6 +124,46 @@ def _prepare_categorical_top_n(
     return labels, values
 
 
+def render_distribution_from_bins(
+    bin_edges: list[float], counts: list[int], col_name: str
+) -> bytes:
+    """
+    Гистограмма из заранее посчитанных бинов (`bin_edges` + `counts`).
+
+    Используется в PDF-отчёте: профайлер уже сложил гистограмму в
+    `meta_features.distributions.numeric[col]` как пара `bin_edges` (N+1
+    значений) и `counts` (N значений). Повторно бить сырые значения
+    через `np.histogram` бессмысленно — здесь рендерим напрямую теми же
+    бинами, что и UI (синхронизация с фронтом).
+
+    В отличие от `render_distribution_histogram` не принимает сырой
+    массив значений и не решает, на сколько бинов делить — этот выбор
+    уже сделан в профайлере.
+
+    Args:
+        bin_edges: границы бинов длины N+1 (где N — число бинов).
+        counts: высоты бинов длины N.
+        col_name: имя столбца для подписи и заголовка.
+
+    Returns:
+        PNG-изображение в виде байтов.
+    """
+    edges = np.asarray(bin_edges, dtype=float)
+    heights = np.asarray(counts, dtype=float)
+    widths = np.diff(edges)
+    centers = edges[:-1] + widths / 2
+
+    fig, ax = plt.subplots(figsize=(7, 3.5))
+    ax.bar(
+        centers, heights, width=widths,
+        color=COLOR_NUMERIC, edgecolor="white", align="center",
+    )
+    ax.set_xlabel(col_name)
+    ax.set_ylabel("Частота")
+    ax.set_title(f"Распределение признака «{col_name}»")
+    return _figure_to_png_bytes(fig)
+
+
 def render_categorical_bar(
     counts: dict[str, int],
     col_name: str,
