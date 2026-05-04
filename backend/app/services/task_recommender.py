@@ -43,6 +43,7 @@ target по эвристике `infer_target_kind` попадают в "categori
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,71 @@ SCALER_PATH = ML_MODELS_DIR / "scaler.pkl"
 # Порог уверенности правил, выше которого ML не вызывается (если правила не
 # просили делегирования). См. `recommender-ml.md`, раздел «Логика гибрида».
 RULES_CONFIDENCE_THRESHOLD = 0.7
+
+
+# Диапазон n_unique для срабатывания numeric-discrete bridge (см.
+# `_should_redirect_to_numeric_branch`). Нижняя граница 3 — bridge не
+# конфликтует с n_unique<=2 (BINARY); верхняя 20 — выше уже семантически
+# регрессия, и `infer_target_kind` корректно вернёт "regression" сам
+# (порог профайлера max(20, 5%·n_rows)).
+NUMERIC_BRIDGE_MIN_UNIQUE = 3
+NUMERIC_BRIDGE_MAX_UNIQUE = 20
+
+
+def _is_numeric_label(value: Any) -> bool:
+    """
+    True если строковый ключ target_value_counts парсится как конечное число.
+
+    Используется numeric-discrete bridge: метки `"0"`, `"1"`, `"2.5"` —
+    численные; `"setosa"`, `"male"`, но и `"inf"`/`"nan"` — НЕ численные
+    (последние два формально парсятся `float()`, но не дают информации
+    о порядке шкалы и не должны переинтерпретироваться как regression).
+    """
+    try:
+        parsed = float(str(value).strip())
+    except (ValueError, TypeError):
+        return False
+    return not (math.isinf(parsed) or math.isnan(parsed))
+
+
+def _should_redirect_to_numeric_branch(
+    *,
+    target_kind: str | None,
+    target_n_unique: int | None,
+    target_value_counts: dict[str, int] | None,
+) -> bool:
+    """
+    Признаки numeric-discrete target, ошибочно классифицированного
+    профайлером как categorical.
+
+    Корневая причина: эвристика `infer_target_kind` использует порог
+    `max(20, 5%·n_rows)` — для маленьких датасетов (Iris, n=150) это
+    значит «categorical при n_unique ≤ 20», что съедает все
+    числовые-discrete целевые с малой кардинальностью (target=0/1/2),
+    оставляя ветку 3 (numeric) недостижимой и блокируя путь
+    AMBIGUOUS_NUMERIC_TARGET → Слой 2 ML.
+
+    Bridge срабатывает только когда target_kind="categorical",
+    `n_unique` в диапазоне `[NUMERIC_BRIDGE_MIN_UNIQUE,
+    NUMERIC_BRIDGE_MAX_UNIQUE]`, и **все** ключи `target_value_counts`
+    парсятся как конечные числа. На string-target ('setosa', 'male')
+    bridge не срабатывает — ветка 4 сохраняет своё поведение.
+
+    Архитектурно это «фикс симптома» в recommender'е; правильный
+    «фикс источника» — расширение `infer_target_kind` в профайлере
+    (Вариант B, отложен после защиты).
+    """
+    if target_kind != "categorical":
+        return False
+    if target_n_unique is None or not target_value_counts:
+        return False
+    if not (
+        NUMERIC_BRIDGE_MIN_UNIQUE
+        <= target_n_unique
+        <= NUMERIC_BRIDGE_MAX_UNIQUE
+    ):
+        return False
+    return all(_is_numeric_label(k) for k in target_value_counts.keys())
 
 
 # Коды критических флагов из `quality_checker.py`, которые добавляются как
@@ -162,6 +228,17 @@ def apply_rules(
                 )
             ],
         )
+
+    # Numeric-discrete bridge: target с малой кардинальностью и числовыми
+    # метками профайлер ошибочно помечает categorical (см. docstring
+    # `_should_redirect_to_numeric_branch`). Перенаправляем такие случаи
+    # в Ветку 3 — это делает достижимым путь AMBIGUOUS_NUMERIC_TARGET → Слой 2.
+    if _should_redirect_to_numeric_branch(
+        target_kind=target_kind,
+        target_n_unique=target_n_unique,
+        target_value_counts=target_value_counts,
+    ):
+        target_kind = "regression"
 
     # Ветка 3: numeric target.
     if target_kind == "regression":
