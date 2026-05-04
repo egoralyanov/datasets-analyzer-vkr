@@ -115,9 +115,21 @@
         <div class="chart">
             <img src="data:image/png;base64,{{ item.png | b64 }}"
                  alt="Распределение {{ item.col_name }}">
+            {% if item.note %}
+            <p class="chart-footnote">{{ item.note }}</p>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
+    {% endif %}
+
+    {% if charts.categorical_summaries %}
+    <h3>Категориальные признаки высокой кардинальности</h3>
+    <ul>
+        {% for s in charts.categorical_summaries %}
+        <li>«{{ s.col_name }}»: {{ s.n_unique }} уникальных значений (вероятно, идентификатор).</li>
+        {% endfor %}
+    </ul>
     {% endif %}
 
     {% if charts.correlation_heatmap %}
@@ -146,7 +158,9 @@
     <h3>Применённые правила</h3>
     <ul>
         {% for rule in task_recommendation.applied_rules %}
-        <li>{{ rule }}</li>
+        <li>
+            <span class="rule-code">{{ rule.code }}</span>{{ rule.description }}
+        </li>
         {% endfor %}
     </ul>
     {% endif %}

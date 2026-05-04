@@ -118,6 +118,7 @@ def _minimal_context(**overrides: Any) -> dict[str, Any]:
         "charts": {
             "numeric_histograms": [],
             "categorical_bars": [],
+            "categorical_summaries": [],
             "correlation_heatmap": None,
             "target_chart": None,
         },
@@ -173,7 +174,12 @@ def report_chain(
                 "task_type_code": "MULTICLASS_CLASSIFICATION",
                 "confidence": 0.95,
                 "source": "rules",
-                "applied_rules": ["CATEGORICAL_TARGET_LOW_CARDINALITY"],
+                "applied_rules": [
+                    {
+                        "code": "MULTICLASS",
+                        "description": "Категориальный target с 3 уникальными классами.",
+                    }
+                ],
                 "explanation": "Категориальный target с 3 уникальными классами.",
                 "ml_probabilities": None,
             },
@@ -301,6 +307,97 @@ def test_generate_report_handles_pgvector_embedding(
     pdf_path = Path(settings.REPORTS_DIR) / saved.file_path
     pdf_path.unlink(missing_ok=True)
     pdf_path.parent.rmdir()
+
+
+def test_render_html_applied_rules_show_code_and_description() -> None:
+    """
+    `applied_rules` рендерятся как `<span class="rule-code">CODE</span>DESCRIPTION` —
+    не как Python-repr словаря.
+    """
+    ctx = _minimal_context(
+        task_recommendation={
+            "task_type_code": "BINARY_CLASSIFICATION",
+            "confidence": 0.95,
+            "source": "rules",
+            "applied_rules": [
+                {"code": "BINARY_BALANCED", "description": "2 класса, баланс < 10:1"},
+                {"code": "TARGET_USABLE", "description": "Target пригоден"},
+            ],
+            "explanation": "ok",
+            "ml_probabilities": None,
+        },
+    )
+    html = report_service._render_html(ctx)
+    assert '<span class="rule-code">BINARY_BALANCED</span>' in html
+    assert "2 класса, баланс &lt; 10:1" in html  # autoescape '<' → '&lt;'
+    assert '<span class="rule-code">TARGET_USABLE</span>' in html
+    assert "Target пригоден" in html
+    # Repr-словарь не должен прорываться в HTML.
+    assert "{'code':" not in html
+    assert "{&#39;code&#39;:" not in html
+
+
+def test_build_chart_data_id_like_categorical_goes_to_summaries() -> None:
+    """
+    ID-подобная колонка (cardinality_ratio > 0.5 ИЛИ n_unique ≥ 30) попадает
+    в `categorical_summaries`, а не в `categorical_bars`. Страховка от
+    одновременного попадания в обе ветки.
+    """
+    meta = {
+        "n_rows": 891,
+        # Cabin: 147/891 ≈ 0.165 — порог 0.5 не сработает, но 147 ≥ 30 → ID.
+        "cardinality_by_column": {"Cabin": 147 / 891, "Sex": 2 / 891},
+        "distributions": {
+            "categorical": {
+                "Cabin": {
+                    "categories": [f"C{i}" for i in range(20)],
+                    "counts": [3] * 20,
+                    "other_count": 144,
+                },
+                "Sex": {
+                    "categories": ["male", "female"],
+                    "counts": [577, 314],
+                    "other_count": 0,
+                },
+            },
+        },
+    }
+    charts = report_service._build_chart_data(meta, target_kind=None)
+
+    assert [s["col_name"] for s in charts["categorical_summaries"]] == ["Cabin"]
+    assert charts["categorical_summaries"][0]["n_unique"] == 147
+    # Cabin не должен дополнительно появиться в bars — страховка от дубля.
+    assert all(item["col_name"] != "Cabin" for item in charts["categorical_bars"])
+    # Sex рендерится обычным баром (низкая кардинальность, не ID).
+    assert [item["col_name"] for item in charts["categorical_bars"]] == ["Sex"]
+
+
+def test_build_chart_data_medium_cardinality_has_chart_note() -> None:
+    """
+    Не-ID категориальная колонка с непустым `other_count` получает поле
+    `note` со строкой ровно «и ещё N значений в категории «Прочее»».
+    """
+    meta = {
+        "n_rows": 1000,
+        # cardinality 0.022 → не ID; n_unique=22 < 30 → тоже не ID.
+        "cardinality_by_column": {"Region": 22 / 1000},
+        "distributions": {
+            "categorical": {
+                "Region": {
+                    "categories": [f"R{i}" for i in range(20)],
+                    "counts": [40] * 20,
+                    "other_count": 130,
+                },
+            },
+        },
+    }
+    charts = report_service._build_chart_data(meta, target_kind=None)
+
+    assert charts["categorical_summaries"] == []
+    assert len(charts["categorical_bars"]) == 1
+    item = charts["categorical_bars"][0]
+    assert item["col_name"] == "Region"
+    assert item["note"] == "и ещё 130 значений в категории «Прочее»"
 
 
 def test_generate_report_failure_records_status_and_error(

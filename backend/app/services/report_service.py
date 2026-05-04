@@ -63,6 +63,16 @@ SIMILAR_TOP_K = 5
 # с baseline_trainer (хранит топ-10 в feature_importance).
 FEATURE_IMPORTANCE_TOP = 10
 
+# Пороги ID-подобной категориальной колонки: либо доля уникальных значений
+# превышает половину строк (классическое определение идентификатора, тот же
+# порог использует recommender для TARGET_LOOKS_LIKE_ID), либо абсолютное
+# число уникальных значений превышает удвоенный DEFAULT_MAX_CATEGORIES
+# рендерера (15) — на 30+ категориях bar chart перестаёт быть информативным.
+# Такие колонки заменяются текстовым саммари, чтобы PDF не содержал визуально
+# бесполезного частокола («Cabin», «Ticket», «Name» на Titanic).
+ID_LIKE_CARDINALITY_THRESHOLD = 0.5
+ID_LIKE_NUNIQUE_THRESHOLD = 30
+
 # Корень шаблонов. Папка лежит в пакете app, поэтому путь резолвится через
 # __file__, не через cwd — иначе тесты падали бы в зависимости от рабочей
 # директории.
@@ -93,6 +103,51 @@ def _create_environment(templates_dir: Path = TEMPLATES_DIR) -> Environment:
 _env: Environment = _create_environment()
 
 
+def _is_id_like(
+    col_name: str,
+    cardinality_by_col: dict[str, float],
+    total_rows: int,
+) -> tuple[bool, int | None]:
+    """
+    Признак ID-подобной категориальной колонки.
+
+    Колонка считается «идентификатором», если выполняется любое из:
+    - cardinality_ratio (n_unique / n_rows) превышает
+      `ID_LIKE_CARDINALITY_THRESHOLD = 0.5` — классическое определение
+      идентификатора (унаследовано от recommender'а: то же правило ловит
+      `TARGET_LOOKS_LIKE_ID`). Работает на любой выборке.
+    - абсолютное число уникальных значений (восстановленное как
+      `round(ratio · n_rows)`) превышает `ID_LIKE_NUNIQUE_THRESHOLD = 30`.
+      Ловит high-N колонки на больших датасетах, где относительная доля
+      уникальных может быть низкой (например, Cabin на Titanic:
+      147 / 891 ≈ 0.165 — порог 0.5 не сработает, но 147 ≥ 30 — да).
+
+    Если `cardinality_by_col` для колонки отсутствует — считаем, что не
+    ID, и не падаем (graceful fallback на обычный bar chart).
+
+    Args:
+        col_name: имя колонки.
+        cardinality_by_col: словарь `{col: n_unique / n_rows}` из meta.
+        total_rows: общее число строк датасета (берётся из `meta["n_rows"]`,
+            не из non-null count, чтобы соответствовать логике
+            cardinality_ratio в профайлере).
+
+    Returns:
+        Пара `(is_id_like, n_unique_estimated)`. Второй элемент полезен
+        вызывающему коду для подстановки в текстовый саммари; `None`,
+        если cardinality неизвестна.
+    """
+    cardinality = cardinality_by_col.get(col_name)
+    if cardinality is None or total_rows <= 0:
+        return False, None
+    n_unique_estimated = max(0, round(float(cardinality) * total_rows))
+    if cardinality > ID_LIKE_CARDINALITY_THRESHOLD:
+        return True, n_unique_estimated
+    if n_unique_estimated >= ID_LIKE_NUNIQUE_THRESHOLD:
+        return True, n_unique_estimated
+    return False, n_unique_estimated
+
+
 def _build_chart_data(meta: dict, target_kind: str | None) -> dict:
     """
     Собирает PNG-байты графиков по meta_features.
@@ -101,12 +156,24 @@ def _build_chart_data(meta: dict, target_kind: str | None) -> dict:
     счётчики категорий из профайлера). Для PDF используем те же бины, что
     Plotly на фронте — визуальная согласованность UI и отчёта.
 
+    Категориальные колонки разделяются на две ветки (Sprint 4, Phase 9):
+    - ID-подобные (см. `_is_id_like`) попадают в `categorical_summaries`
+      как текстовая запись, без графика — bar chart на 30+ категориях с
+      доминирующим «Прочее»-баром бесполезен на A4.
+    - Остальные рендерятся в `categorical_bars`. Если `other_count > 0`,
+      к записи добавляется `note` для footnote под графиком.
+
     Returns:
         dict с ключами `numeric_histograms`, `categorical_bars`,
-        `correlation_heatmap`, `target_chart`. Отсутствующие графики —
-        пустой список или `None`.
+        `categorical_summaries`, `correlation_heatmap`, `target_chart`.
+        Отсутствующие графики — пустой список или `None`.
     """
     distributions = meta.get("distributions") or {}
+    # `cardinality_by_column` лежит на верхнем уровне meta (см. profiler.
+    # compute_categorical_features), а не во вложенной секции — кладёт его
+    # туда сам профайлер.
+    cardinality_by_col = meta.get("cardinality_by_column") or {}
+    total_rows = int(meta.get("n_rows") or 0)
 
     numeric_dists = distributions.get("numeric") or {}
     numeric_histograms = []
@@ -119,18 +186,39 @@ def _build_chart_data(meta: dict, target_kind: str | None) -> dict:
         numeric_histograms.append({"col_name": col_name, "png": png})
 
     categorical_dists = distributions.get("categorical") or {}
-    categorical_bars = []
+    categorical_bars: list[dict] = []
+    categorical_summaries: list[dict] = []
     for col_name, dist in list(categorical_dists.items())[:MAX_CATEGORICAL_DISTRIBUTIONS]:
         categories = dist.get("categories") or []
         counts = dist.get("counts") or []
         other_count = int(dist.get("other_count") or 0)
+
+        is_id_like, n_unique_estimated = _is_id_like(
+            col_name, cardinality_by_col, total_rows
+        )
+        if is_id_like:
+            categorical_summaries.append({
+                "col_name": col_name,
+                "n_unique": n_unique_estimated,
+            })
+            continue
+
         counts_dict = {str(cat): int(cnt) for cat, cnt in zip(categories, counts)}
+        # TODO: профайлер хранит top-20 + other_count, render_categorical_bar
+        # ещё раз сворачивает до DEFAULT_MAX_CATEGORIES=15 + «Прочее (Y)».
+        # Двойная свёртка — техдолг, унификация на единый порог отнесена
+        # к направлениям развития (post-Sprint 4).
         if other_count > 0:
             counts_dict[f"Прочее ({other_count})"] = other_count
         if not counts_dict:
             continue
         png = chart_renderer.render_categorical_bar(counts_dict, col_name)
-        categorical_bars.append({"col_name": col_name, "png": png})
+        item: dict = {"col_name": col_name, "png": png}
+        if other_count > 0:
+            item["note"] = (
+                f"и ещё {other_count} значений в категории «Прочее»"
+            )
+        categorical_bars.append(item)
 
     correlation_png: bytes | None = None
     correlation_matrix = meta.get("correlation_matrix") or {}
@@ -162,6 +250,7 @@ def _build_chart_data(meta: dict, target_kind: str | None) -> dict:
     return {
         "numeric_histograms": numeric_histograms,
         "categorical_bars": categorical_bars,
+        "categorical_summaries": categorical_summaries,
         "correlation_heatmap": correlation_png,
         "target_chart": target_chart,
     }
