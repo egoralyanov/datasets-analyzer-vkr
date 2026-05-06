@@ -42,11 +42,11 @@ export function Header() {
               <NavItem to="/upload" label="Загрузить" />
               <NavItem to="/history" label="История" />
               {user.role === "admin" && <NavItem to="/admin" label="Админ" />}
-              <NavItem to="/profile" label={user.username} mono />
+              <NavItem to="/profile" label={`@${user.username}`} mono />
               <button
                 type="button"
                 onClick={onLogout}
-                className="text-paper-600 transition-colors hover:text-ink-700"
+                className="border-b-2 border-transparent pb-0.5 text-paper-600 transition-colors hover:border-ink-700 hover:text-ink-700"
               >
                 Выйти
               </button>
