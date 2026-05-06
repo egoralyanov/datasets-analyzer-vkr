@@ -1,5 +1,12 @@
+// Drop-zone выбора и загрузки датасета.
+//
+// Стиль (Sprint 5, Phase 3.5): scientific/archive — внешняя hairline-обводка
+// с декоративной двойной рамкой и `+`-метками в углах. Когда файл выбран —
+// dropzone сворачивается в одну компактную ruled-строку «имя файла · размер
+// · [Убрать] [Загрузить]». Большая инструкция «перетащите...» уходит, чтобы
+// не отвлекать от уже сделанного выбора.
 import { useRef, useState } from "react";
-import { Loader2, Upload as UploadIcon, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   ALLOWED_DATASET_EXTENSIONS,
   MAX_FILE_SIZE_BYTES,
@@ -61,7 +68,7 @@ export function FileDropZone({ onUpload, uploading, uploadPercent }: Props) {
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) acceptFile(f);
-    // Сбрасываем input, чтобы можно было выбрать тот же файл повторно после "Убрать".
+    // Сбрасываем input, чтобы можно было выбрать тот же файл повторно после «Убрать».
     e.target.value = "";
   };
   const onClear = () => {
@@ -72,24 +79,117 @@ export function FileDropZone({ onUpload, uploading, uploadPercent }: Props) {
     if (file) onUpload(file);
   };
 
+  // Компактный режим: файл выбран, ruled-строка с действиями.
+  if (file) {
+    return (
+      <div className="space-y-3">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-4 border-l-[3px] px-5 py-3 ${
+            uploading
+              ? "border-info-500 bg-info-50/40"
+              : "border-ink-700 bg-paper-50"
+          }`}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+              ФАЙЛ ВЫБРАН
+            </p>
+            <p className="mt-1 truncate font-mono text-sm text-paper-800">
+              {file.name}
+            </p>
+            <p className="mt-0.5 font-mono text-xs text-paper-500">
+              {formatBytes(file.size)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClear}
+              disabled={uploading}
+              className="border border-paper-400 bg-paper-50 px-3 py-1.5 font-sans text-xs font-medium uppercase tracking-wider text-paper-600 transition-colors hover:border-ink-700 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ✕ УБРАТЬ
+            </button>
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={uploading}
+              className="inline-flex items-center gap-2 border border-ink-700 bg-ink-700 px-4 py-1.5 font-sans text-xs font-medium uppercase tracking-wider text-paper-50 transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              ЗАГРУЗИТЬ
+            </button>
+          </div>
+        </div>
+        {uploading && (
+          <div>
+            <div className="h-1 w-full bg-paper-200">
+              <div
+                className="h-1 bg-ink-700 transition-all"
+                style={{ width: `${uploadPercent}%` }}
+              />
+            </div>
+            <p className="mt-1 font-mono text-xs text-paper-500">
+              ЗАГРУЗКА · {uploadPercent}%
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Полный режим: ничего не выбрано — большая «архивная карточка».
   return (
-    <div
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-        dragActive ? "border-blue-500 bg-blue-50" : "border-slate-300 bg-white"
-      }`}
-    >
-      <UploadIcon className="mx-auto h-8 w-8 text-slate-400" />
-      <p className="mt-3 text-sm text-slate-700">
-        {dragActive
-          ? "Отпустите файл здесь"
-          : "Перетащите CSV или XLSX-файл сюда"}
-      </p>
-      <p className="mt-1 text-xs text-slate-500">
-        или выберите файл вручную (до {MAX_FILE_SIZE_MB} МБ)
-      </p>
+    <div className="space-y-3">
+      <div
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        onClick={onPick}
+        className={`relative cursor-pointer border bg-paper-50 px-8 py-12 text-center transition-colors ${
+          dragActive
+            ? "border-ink-700 bg-ink-700 text-paper-50"
+            : "border-paper-300 hover:border-ink-700"
+        }`}
+        style={{
+          // Декоративная внутренняя двойная рамка через inset-shadow
+          // (см. DESIGN_TOKENS.md, раздел 8.3).
+          boxShadow: dragActive
+            ? "inset 0 0 0 1px #FAF8F4"
+            : "inset 0 0 0 1px #D2CCBE",
+          backgroundClip: "padding-box",
+        }}
+      >
+        <CornerMark inverted={dragActive} className="absolute left-3 top-3" />
+        <CornerMark inverted={dragActive} className="absolute right-3 top-3" />
+        <CornerMark inverted={dragActive} className="absolute left-3 bottom-3" />
+        <CornerMark
+          inverted={dragActive}
+          className="absolute right-3 bottom-3"
+        />
+
+        <p
+          className={`font-serif text-[1.5rem] font-semibold leading-snug tracking-tight ${
+            dragActive ? "text-paper-50" : "text-paper-900"
+          }`}
+        >
+          {dragActive ? "Отпустите файл здесь" : "Перетащите файл"}
+        </p>
+        <p
+          className={`mt-1 font-sans text-sm ${
+            dragActive ? "text-paper-100" : "text-paper-500"
+          }`}
+        >
+          {dragActive ? "" : "или нажмите, чтобы выбрать"}
+        </p>
+        <p
+          className={`mt-3 font-mono text-xs ${
+            dragActive ? "text-paper-200" : "text-paper-500"
+          }`}
+        >
+          CSV / XLSX · до {MAX_FILE_SIZE_MB} МБ
+        </p>
+      </div>
 
       <input
         ref={inputRef}
@@ -99,68 +199,30 @@ export function FileDropZone({ onUpload, uploading, uploadPercent }: Props) {
         onChange={onInputChange}
       />
 
-      {!file && !error && (
-        <button
-          type="button"
-          onClick={onPick}
-          className="mt-4 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
-        >
-          Выбрать файл
-        </button>
-      )}
-
       {error && (
-        <div className="mt-4 mx-auto max-w-md rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div className="border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
           {error}
         </div>
       )}
-
-      {file && (
-        <div className="mt-4 mx-auto max-w-md rounded-md border border-slate-200 bg-slate-50 p-3 text-left">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-900">
-                {file.name}
-              </p>
-              <p className="text-xs text-slate-500">{formatBytes(file.size)}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onClear}
-              disabled={uploading}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-200 disabled:opacity-50"
-              aria-label="Убрать файл"
-            >
-              <X className="h-3.5 w-3.5" />
-              Убрать
-            </button>
-          </div>
-
-          {uploading && (
-            <div className="mt-3">
-              <div className="h-2 w-full rounded-full bg-slate-200">
-                <div
-                  className="h-2 rounded-full bg-blue-600 transition-all"
-                  style={{ width: `${uploadPercent}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-slate-500">
-                Загрузка… {uploadPercent}%
-              </p>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={uploading}
-            className="mt-3 inline-flex items-center justify-center gap-2 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
-          >
-            {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Загрузить
-          </button>
-        </div>
-      )}
     </div>
+  );
+}
+
+function CornerMark({
+  inverted,
+  className = "",
+}: {
+  inverted: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`font-mono text-xs ${
+        inverted ? "text-paper-200" : "text-paper-400"
+      } ${className}`}
+      aria-hidden="true"
+    >
+      +
+    </span>
   );
 }
