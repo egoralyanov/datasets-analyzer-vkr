@@ -1,7 +1,12 @@
+// Страница загрузки и управления датасетами.
+//
+// Стиль (Sprint 5, Phase 3.6): scientific/archive — серифные §-заголовки,
+// metadata в Mono, кнопки в archive-стиле, список датасетов как нумерованный
+// каталог с hairline-руллями (по аналогии с SimilarDatasetsCard).
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { datasetsApi } from "../api/datasets";
 import { analysesApi } from "../api/analyses";
 import type { Dataset, DatasetWithPreview } from "../types/dataset";
@@ -94,25 +99,32 @@ export function Upload() {
   });
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold text-slate-900">Загрузка датасета</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        Поддерживаются CSV и XLSX. Файл сохраняется только для вашего аккаунта.
+    <div className="mx-auto max-w-[1100px] px-8 py-12 lg:px-16">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        ЗАГРУЗКА И УПРАВЛЕНИЕ
+      </p>
+      <h1 className="mt-2 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
+        Датасеты
+      </h1>
+      <p className="mt-3 max-w-2xl font-serif text-[0.9375rem] leading-relaxed text-paper-600">
+        Поддерживаются CSV и XLSX. Файл сохраняется только для вашего аккаунта,
+        кодировка и разделитель определяются автоматически.
       </p>
 
       {toast && (
         <div
-          className={`mt-4 rounded-md p-3 text-sm border ${
+          className={`mt-6 border-l-[3px] px-4 py-2 font-sans text-sm ${
             toast.kind === "success"
-              ? "border-green-200 bg-green-50 text-green-800"
-              : "border-red-200 bg-red-50 text-red-800"
+              ? "border-success-500 bg-paper-50 text-success-700"
+              : "border-critical-500 bg-critical-50/70 text-critical-700"
           }`}
         >
           {toast.text}
         </div>
       )}
 
-      <div className="mt-6">
+      <div className="mt-10">
+        <SectionHeader number={1} title="Загрузка нового файла" />
         <FileDropZone
           onUpload={(file) => uploadMutation.mutate(file)}
           uploading={uploadMutation.isPending}
@@ -120,16 +132,19 @@ export function Upload() {
         />
       </div>
 
-      <div ref={previewRef} className="mt-8">
+      <div ref={previewRef} className="mt-12">
         {current && (
-          <DatasetPreview
-            data={current}
-            onDelete={() => onDelete(current.id, current.original_filename)}
-            onAnalyze={() => {
-              setAnalyzeError(null);
-              setAnalyzeOpen(true);
-            }}
-          />
+          <>
+            <SectionHeader number={2} title="Превью датасета" />
+            <DatasetPreview
+              data={current}
+              onDelete={() => onDelete(current.id, current.original_filename)}
+              onAnalyze={() => {
+                setAnalyzeError(null);
+                setAnalyzeOpen(true);
+              }}
+            />
+          </>
         )}
       </div>
 
@@ -142,33 +157,51 @@ export function Upload() {
         onSubmit={(params) => startAnalysisMutation.mutate(params)}
       />
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold text-slate-900">Мои датасеты</h2>
+      <section className="mt-12">
+        <SectionHeader
+          number={current ? 3 : 2}
+          title="Мои датасеты"
+          note={
+            listQuery.data
+              ? `${listQuery.data.length} ${pluralizeRu(
+                  listQuery.data.length,
+                  "запись",
+                  "записи",
+                  "записей",
+                )}`
+              : undefined
+          }
+        />
         {listQuery.isPending ? (
-          <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Загрузка…
+          <div className="flex items-center gap-2 border-l-[3px] border-info-500 bg-paper-50 px-4 py-3 font-sans text-sm text-paper-600">
+            <Loader2 className="h-4 w-4 animate-spin text-info-500" />
+            Загрузка списка…
           </div>
         ) : listQuery.isError ? (
-          <p className="mt-4 text-sm text-red-700">
+          <p className="border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
             Не удалось загрузить список датасетов.
           </p>
         ) : listQuery.data && listQuery.data.length > 0 ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {listQuery.data.map((d) => (
-              <DatasetCard
+          <ol className="divide-y divide-paper-200 border-y border-paper-200">
+            {listQuery.data.map((d, idx) => (
+              <DatasetRow
                 key={d.id}
+                index={idx + 1}
                 dataset={d}
                 isActive={current?.id === d.id}
-                isOpening={openMutation.isPending && openMutation.variables === d.id}
-                isDeleting={deleteMutation.isPending && deleteMutation.variables === d.id}
+                isOpening={
+                  openMutation.isPending && openMutation.variables === d.id
+                }
+                isDeleting={
+                  deleteMutation.isPending && deleteMutation.variables === d.id
+                }
                 onOpen={() => openMutation.mutate(d.id)}
                 onDelete={() => onDelete(d.id, d.original_filename)}
               />
             ))}
-          </div>
+          </ol>
         ) : (
-          <p className="mt-4 text-sm text-slate-500">
+          <p className="border-l-[3px] border-paper-400 bg-paper-100/60 px-4 py-2 font-serif text-sm text-paper-600">
             У вас пока нет загруженных датасетов.
           </p>
         )}
@@ -177,7 +210,34 @@ export function Upload() {
   );
 }
 
-function DatasetCard({
+function SectionHeader({
+  number,
+  title,
+  note,
+}: {
+  number: number;
+  title: string;
+  note?: string;
+}) {
+  return (
+    <header className="mb-5 flex items-baseline justify-between gap-4 border-b border-paper-300 pb-2">
+      <h2 className="flex items-baseline gap-3 font-serif text-[1.5rem] font-semibold leading-snug tracking-tight text-paper-900">
+        <span className="font-sans text-base font-medium text-paper-400">
+          §{number}
+        </span>
+        {title}
+      </h2>
+      {note && (
+        <span className="font-sans text-xs uppercase tracking-wider text-paper-500">
+          {note}
+        </span>
+      )}
+    </header>
+  );
+}
+
+function DatasetRow({
+  index,
   dataset,
   isActive,
   isOpening,
@@ -185,6 +245,7 @@ function DatasetCard({
   onOpen,
   onDelete,
 }: {
+  index: number;
   dataset: Dataset;
   isActive: boolean;
   isOpening: boolean;
@@ -192,56 +253,73 @@ function DatasetCard({
   onOpen: () => void;
   onDelete: () => void;
 }) {
-  const Icon = dataset.format === "xlsx" ? FileSpreadsheet : FileText;
-  const iconColor = dataset.format === "xlsx" ? "text-emerald-600" : "text-blue-600";
-  const ringClass = isActive ? "ring-2 ring-blue-500" : "hover:shadow-sm";
+  const sizeRows =
+    dataset.n_rows !== null && dataset.n_cols !== null
+      ? `${formatNumber(dataset.n_rows)} строк × ${formatNumber(dataset.n_cols)} колонок`
+      : null;
 
   return (
-    <div
-      className={`rounded-lg border border-slate-200 bg-white p-4 transition-shadow ${ringClass}`}
+    <li
+      className={`grid grid-cols-[2.5rem_1fr_auto] items-start gap-4 px-1 py-4 ${
+        isActive ? "border-l-[3px] border-ink-700 bg-paper-100/50 pl-3" : ""
+      }`}
     >
-      <div className="flex items-start gap-3">
-        <Icon className={`h-5 w-5 shrink-0 ${iconColor}`} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-900">
-            {dataset.original_filename}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {dataset.n_rows !== null && dataset.n_cols !== null
-              ? `${formatNumber(dataset.n_rows)} строк × ${formatNumber(
-                  dataset.n_cols,
-                )} колонок · `
-              : ""}
-            {formatBytes(dataset.file_size_bytes)} ·{" "}
-            {formatDateTime(dataset.uploaded_at)}
-          </p>
-        </div>
+      <span className="pt-0.5 font-mono text-sm text-paper-400">
+        {String(index).padStart(2, "0")}.
+      </span>
+      <div className="min-w-0">
+        <p className="truncate font-serif text-[1.0625rem] font-semibold leading-snug text-paper-900">
+          {dataset.original_filename}
+        </p>
+        <p className="mt-1 font-mono text-xs text-paper-500">
+          {sizeRows && <>{sizeRows} · </>}
+          {formatBytes(dataset.file_size_bytes)} · {formatDateTime(dataset.uploaded_at)}
+        </p>
+        <p className="mt-1 font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
+          ФОРМАТ:{" "}
+          <span className="font-mono normal-case tracking-normal text-paper-700">
+            {dataset.format}
+          </span>
+        </p>
       </div>
-      <div className="mt-3 flex justify-end gap-2">
+      <div className="flex shrink-0 gap-2">
         <button
           type="button"
           onClick={onOpen}
           disabled={isOpening}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 border border-ink-700 bg-paper-50 px-3 py-1.5 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 transition-colors hover:bg-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isOpening && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Открыть
+          ОТКРЫТЬ
         </button>
         <button
           type="button"
           onClick={onDelete}
           disabled={isDeleting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 border border-paper-400 bg-paper-50 px-3 py-1.5 font-sans text-xs font-medium uppercase tracking-wider text-paper-600 transition-colors hover:border-critical-500 hover:text-critical-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isDeleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Удалить
+          УДАЛИТЬ
         </button>
       </div>
-    </div>
+    </li>
   );
 }
 
-// Карта серверных кодов в сообщение об ошибке для запуска анализа.
+// Простая русская плюрализация (1 запись / 2 записи / 5 записей).
+function pluralizeRu(
+  n: number,
+  one: string,
+  few: string,
+  many: string,
+): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
 function extractAnalysisError(err: unknown): string {
   const e = err as {
     response?: { status?: number; data?: { detail?: unknown } };
@@ -253,7 +331,6 @@ function extractAnalysisError(err: unknown): string {
   return "Не удалось запустить анализ. Попробуйте ещё раз.";
 }
 
-// Карта серверных кодов в человеческие сообщения для загрузки датасета.
 function extractDatasetError(err: unknown): string {
   const e = err as {
     response?: { status?: number; data?: { detail?: unknown } };
