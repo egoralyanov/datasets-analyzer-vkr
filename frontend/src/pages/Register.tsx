@@ -1,3 +1,7 @@
+// Страница регистрации.
+//
+// Стиль (Sprint 5, Phase 3.9): scientific/archive — §-заголовок, hairline-
+// контейнер, инпуты с тонкой ink-обводкой при focus, archive-кнопка primary.
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
@@ -43,7 +47,11 @@ export function Register() {
     }
     setLoading(true);
     try {
-      await authApi.register({ email: email.trim(), username: username.trim(), password });
+      await authApi.register({
+        email: email.trim(),
+        username: username.trim(),
+        password,
+      });
       navigate("/login", {
         state: { flash: "Регистрация успешна. Теперь войдите." },
       });
@@ -55,22 +63,30 @@ export function Register() {
   };
 
   return (
-    <div className="max-w-md mx-auto px-6 py-12">
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm p-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Регистрация</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Создайте аккаунт, чтобы загружать датасеты и видеть историю анализов.
-        </p>
+    <div className="mx-auto max-w-[480px] px-8 py-16">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        НОВЫЙ АККАУНТ
+      </p>
+      <h1 className="mt-2 flex items-baseline gap-3 font-serif text-[2rem] font-bold leading-tight tracking-tight text-paper-900">
+        <span className="font-sans text-base font-medium text-paper-400">
+          §
+        </span>
+        Регистрация
+      </h1>
+      <p className="mt-3 font-serif text-sm leading-relaxed text-paper-600">
+        Создайте аккаунт, чтобы загружать датасеты и видеть историю анализов.
+      </p>
 
+      <div className="mt-6 border border-paper-300 bg-paper-50 p-6">
         {error && (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <div className="mb-4 border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
             {error}
           </div>
         )}
 
-        <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <form className="space-y-5" onSubmit={onSubmit}>
           <Field label="Email" htmlFor="reg-email">
-            <input
+            <ArchiveInput
               id="reg-email"
               ref={inputRef}
               type="email"
@@ -78,12 +94,11 @@ export function Register() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </Field>
 
           <Field label="Username" htmlFor="reg-username">
-            <input
+            <ArchiveInput
               id="reg-username"
               type="text"
               autoComplete="username"
@@ -91,13 +106,12 @@ export function Register() {
               minLength={USERNAME_MIN}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </Field>
 
           <Field label="Пароль" htmlFor="reg-password">
             <div className="relative">
-              <input
+              <ArchiveInput
                 id="reg-password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
@@ -105,12 +119,12 @@ export function Register() {
                 minLength={PASSWORD_MIN}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 pr-10 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                className="pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-700"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-paper-500 hover:text-ink-700"
                 aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
               >
                 {showPassword ? (
@@ -120,11 +134,13 @@ export function Register() {
                 )}
               </button>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Минимум {PASSWORD_MIN} символов.</p>
+            <p className="mt-1 font-mono text-xs text-paper-500">
+              минимум {PASSWORD_MIN} символов
+            </p>
           </Field>
 
           <Field label="Повторите пароль" htmlFor="reg-confirm">
-            <input
+            <ArchiveInput
               id="reg-confirm"
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
@@ -132,27 +148,29 @@ export function Register() {
               minLength={PASSWORD_MIN}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </Field>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+            className="inline-flex w-full items-center justify-center gap-2 border border-ink-700 bg-ink-700 px-4 py-2.5 font-sans text-xs font-medium uppercase tracking-wider text-paper-50 transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Зарегистрироваться
+            ЗАРЕГИСТРИРОВАТЬСЯ
           </button>
         </form>
-
-        <p className="mt-5 text-sm text-slate-600">
-          Уже есть аккаунт?{" "}
-          <Link to="/login" className="text-blue-600 hover:text-blue-700">
-            Войти
-          </Link>
-        </p>
       </div>
+
+      <p className="mt-5 font-serif text-sm text-paper-600">
+        Уже есть аккаунт?{" "}
+        <Link
+          to="/login"
+          className="border-b border-ink-700 pb-0.5 font-sans text-xs font-medium uppercase tracking-wider text-ink-700"
+        >
+          ВОЙТИ
+        </Link>
+      </p>
     </div>
   );
 }
@@ -168,13 +186,28 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-900">
+      <label
+        htmlFor={htmlFor}
+        className="block font-sans text-xs font-medium uppercase tracking-wider text-paper-500"
+      >
         {label}
       </label>
-      <div className="mt-1">{children}</div>
+      <div className="mt-1.5">{children}</div>
     </div>
   );
 }
+
+const ArchiveInput = ({
+  className = "",
+  ...rest
+}: React.InputHTMLAttributes<HTMLInputElement> & {
+  ref?: React.Ref<HTMLInputElement>;
+}) => (
+  <input
+    {...rest}
+    className={`block w-full border border-paper-400 bg-paper-50 px-3 py-2 font-mono text-sm text-paper-800 placeholder:text-paper-400 focus:border-ink-700 focus:outline-none focus:ring-0 ${className}`}
+  />
+);
 
 function extractDetail(err: unknown): string | null {
   if (
@@ -184,7 +217,8 @@ function extractDetail(err: unknown): string | null {
     typeof (err as { response?: { data?: { detail?: unknown } } }).response?.data
       ?.detail === "string"
   ) {
-    return (err as { response: { data: { detail: string } } }).response.data.detail;
+    return (err as { response: { data: { detail: string } } }).response.data
+      .detail;
   }
   return null;
 }
