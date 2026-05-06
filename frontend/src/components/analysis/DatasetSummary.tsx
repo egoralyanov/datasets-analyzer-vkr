@@ -1,4 +1,8 @@
-import { Database, FileText, Info } from "lucide-react";
+// Сводка датасета — «specimen header» в духе выходных данных научной
+// публикации: definition-list с лейблами в Sans uppercase tracking и
+// значениями в Mono, hairline-разделители между строк.
+//
+// См. frontend/DESIGN_TOKENS.md, раздел 8.4.
 import type { MetaFeatures } from "../../types/analysis";
 import { formatNumber } from "../../lib/format";
 
@@ -8,135 +12,120 @@ type Props = {
   targetColumn: string | null;
 };
 
-const DTYPE_PILL_COLORS: Record<string, string> = {
-  int: "bg-blue-50 text-blue-700 border-blue-200",
-  float: "bg-blue-50 text-blue-700 border-blue-200",
-  str: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  object: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  bool: "bg-slate-100 text-slate-700 border-slate-200",
-  datetime: "bg-violet-50 text-violet-700 border-violet-200",
-};
-
-function pillColorFor(dtype: string): string {
-  for (const key of Object.keys(DTYPE_PILL_COLORS)) {
-    if (dtype.toLowerCase().includes(key)) return DTYPE_PILL_COLORS[key];
-  }
-  return "bg-slate-100 text-slate-700 border-slate-200";
-}
-
 export function DatasetSummary({ meta, filename, targetColumn }: Props) {
   const totalMissingPct = (meta.total_missing_pct ?? 0) * 100;
+  const duplicatesPct = (meta.duplicate_rows_pct ?? 0) * 100;
   const sampling = meta.sampling;
 
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6">
-      <div className="flex items-center gap-2">
-        <Database className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-slate-900">Сводка датасета</h2>
-      </div>
+  // Перечень dtype'ов в формате «int: 5, float: 2, object: 4».
+  const dtypeBreakdown = Object.entries(meta.dtype_counts || {})
+    .map(([dtype, count]) => `${dtype} ${count}`)
+    .join(" · ");
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        <Stat label="Строк" value={formatNumber(meta.n_rows)} />
-        <Stat label="Столбцов" value={formatNumber(meta.n_cols)} />
-        <Stat
+  // Тип target отображаем словом, не enum-кодом.
+  const targetKindLabel = (() => {
+    if (!meta.target_kind) return null;
+    return meta.target_kind === "categorical" ? "категориальная" : "числовая";
+  })();
+
+  return (
+    <div className="border border-paper-300 bg-paper-50">
+      <dl className="divide-y divide-paper-200">
+        {filename && <Row label="Имя файла" value={filename} mono />}
+        <Row
+          label="Строк × столбцов"
+          value={`${formatNumber(meta.n_rows)} × ${formatNumber(meta.n_cols)}`}
+          mono
+        />
+        <Row
           label="Размер в памяти"
           value={`${(meta.memory_mb ?? 0).toFixed(2)} МБ`}
+          mono
         />
-      </div>
-
-      {filename && (
-        <p className="mt-4 flex items-center gap-1.5 text-sm text-slate-600">
-          <FileText className="h-4 w-4" />
-          <span className="truncate">{filename}</span>
-        </p>
-      )}
-
-      {targetColumn && (
-        <p className="mt-2 text-sm text-slate-600">
-          Целевая переменная:{" "}
-          <span className="font-medium text-slate-900">«{targetColumn}»</span>
-          {meta.target_kind && (
-            <span className="ml-2 text-slate-500">
-              (
-              {meta.target_kind === "categorical"
-                ? "категориальная"
-                : "числовая"}
-              )
-            </span>
-          )}
-        </p>
-      )}
-
-      <div className="mt-4">
-        <p className="text-xs uppercase tracking-wide text-slate-500">
-          Типы колонок
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {Object.entries(meta.dtype_counts || {}).map(([dtype, count]) => (
-            <span
-              key={dtype}
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${pillColorFor(
-                dtype,
-              )}`}
-            >
-              {dtype}
-              <span className="rounded bg-white/60 px-1 text-[10px]">
-                {count}
-              </span>
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Stat
-          label="Общая доля пропусков"
-          value={`${totalMissingPct.toFixed(1)}%`}
-          highlight={totalMissingPct > 10}
+        {dtypeBreakdown && (
+          <Row label="Типы колонок" value={dtypeBreakdown} mono />
+        )}
+        <Row
+          label="Пропусков (всего)"
+          value={`${totalMissingPct.toFixed(2)}%`}
+          mono
+          tone={totalMissingPct > 10 ? "warning" : undefined}
         />
-        <Stat
-          label="Доля дубликатов"
-          value={`${((meta.duplicate_rows_pct ?? 0) * 100).toFixed(1)}%`}
-          highlight={(meta.duplicate_rows_pct ?? 0) > 0.05}
+        <Row
+          label="Дубликатов строк"
+          value={`${duplicatesPct.toFixed(2)}%`}
+          mono
+          tone={duplicatesPct > 5 ? "warning" : undefined}
         />
-      </div>
-
-      {sampling?.sampled && (
-        <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            Использован сэмпл из{" "}
-            <strong>{formatNumber(sampling.sample_size)}</strong> строк
-            (исходный размер{" "}
-            <strong>{formatNumber(sampling.original_size)}</strong>).
-            Сэмплирование стратифицированное по target — требование
-            производительности при размере свыше 50 000 строк.
-          </span>
-        </div>
-      )}
-    </section>
+        {targetColumn && (
+          <Row
+            label="Целевая переменная"
+            value={
+              <>
+                <span className="font-mono">«{targetColumn}»</span>
+                {targetKindLabel && (
+                  <span className="ml-2 text-paper-500">
+                    — {targetKindLabel}
+                  </span>
+                )}
+              </>
+            }
+          />
+        )}
+        {sampling?.sampled && (
+          <Row
+            label="Сэмплирование"
+            value={
+              <>
+                <span className="font-mono">
+                  {formatNumber(sampling.sample_size)}
+                </span>
+                <span className="text-paper-500"> из </span>
+                <span className="font-mono">
+                  {formatNumber(sampling.original_size)}
+                </span>
+                <span className="text-paper-500">
+                  {" "}
+                  · стратифицировано по target
+                </span>
+              </>
+            }
+            tone="info"
+          />
+        )}
+      </dl>
+    </div>
   );
 }
 
-function Stat({
+type Tone = "warning" | "info";
+
+function Row({
   label,
   value,
-  highlight = false,
+  mono = false,
+  tone,
 }: {
   label: string;
-  value: string;
-  highlight?: boolean;
+  value: React.ReactNode;
+  mono?: boolean;
+  tone?: Tone;
 }) {
+  const valueClass = [
+    mono ? "font-mono" : "font-sans",
+    tone === "warning" && "text-warning-700",
+    tone === "info" && "text-info-700",
+    !tone && "text-paper-800",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div>
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p
-        className={`mt-1 text-2xl font-semibold ${
-          highlight ? "text-amber-700" : "text-slate-900"
-        }`}
-      >
-        {value}
-      </p>
+    <div className="grid grid-cols-[12rem_1fr] gap-6 px-5 py-3">
+      <dt className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        {label}
+      </dt>
+      <dd className={`text-sm ${valueClass}`}>{value}</dd>
     </div>
   );
 }

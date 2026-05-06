@@ -1,5 +1,9 @@
+// Рекомендация типа ML-задачи — «editorial pull-quote»: крупный
+// серифный текст с 3px-рулькой ink.700 слева, под цитатой — мелкие
+// технические лейблы (confidence, source) и список применённых правил.
+//
+// См. frontend/DESIGN_TOKENS.md, раздел 8.4.
 import { useState } from "react";
-import { ChevronDown, ChevronRight, HelpCircle, Target } from "lucide-react";
 import type {
   RecommendationSource,
   TaskRecommendation,
@@ -19,9 +23,9 @@ const TASK_TYPE_LABEL: Record<TaskTypeCode, string> = {
 };
 
 const SOURCE_LABEL: Record<RecommendationSource, string> = {
-  rules: "Правила",
-  ml: "ML-модель",
-  hybrid: "Гибрид",
+  rules: "rules",
+  ml: "ml",
+  hybrid: "hybrid",
 };
 
 const SOURCE_DESCRIPTION: Record<RecommendationSource, string> = {
@@ -30,32 +34,10 @@ const SOURCE_DESCRIPTION: Record<RecommendationSource, string> = {
   hybrid: "Правила задали направление, ML-модель уточнила тип.",
 };
 
-// Цветовая шкала уверенности: 90%+ — стабильно, 70-90% — приемлемо,
-// меньше 70% — мягкий сигнал «решение неустойчивое».
-function confidenceTone(confidence: number): {
-  pillBg: string;
-  pillText: string;
-  bar: string;
-} {
-  if (confidence >= 0.9) {
-    return {
-      pillBg: "bg-emerald-50 border-emerald-200",
-      pillText: "text-emerald-700",
-      bar: "bg-emerald-500",
-    };
-  }
-  if (confidence >= 0.7) {
-    return {
-      pillBg: "bg-amber-50 border-amber-200",
-      pillText: "text-amber-700",
-      bar: "bg-amber-500",
-    };
-  }
-  return {
-    pillBg: "bg-slate-100 border-slate-200",
-    pillText: "text-slate-700",
-    bar: "bg-slate-400",
-  };
+function confidenceTone(confidence: number): string {
+  if (confidence >= 0.9) return "text-success-700";
+  if (confidence >= 0.7) return "text-warning-700";
+  return "text-paper-500";
 }
 
 export function TaskRecommendationCard({ recommendation }: Props) {
@@ -63,23 +45,19 @@ export function TaskRecommendationCard({ recommendation }: Props) {
 
   if (recommendation === null) {
     return (
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <div className="flex items-center gap-2">
-          <Target className="h-5 w-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-slate-900">Тип задачи</h2>
-        </div>
-        <div className="mt-4 flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-          <span>
-            Не удалось определить тип задачи. Обычно это значит, что
-            мета-классификатор недоступен — попробуйте обновить модель командой
-            <code className="mx-1 rounded bg-white px-1 py-0.5 font-mono text-xs text-slate-800">
-              make train-meta
-            </code>
-            и перезапустить анализ.
-          </span>
-        </div>
-      </section>
+      <div className="border-l-[3px] border-info-500 bg-paper-50 px-5 py-4">
+        <p className="font-sans text-xs font-medium uppercase tracking-wider text-info-700">
+          ⓘ ТИП ЗАДАЧИ НЕ ОПРЕДЕЛЁН
+        </p>
+        <p className="mt-1 font-serif text-[0.9375rem] leading-relaxed text-paper-700">
+          Не удалось определить тип задачи — обычно это значит, что
+          мета-классификатор недоступен. Попробуйте обновить модель командой{" "}
+          <code className="font-mono text-sm text-paper-800">
+            make train-meta
+          </code>{" "}
+          и перезапустить анализ.
+        </p>
+      </div>
     );
   }
 
@@ -88,68 +66,61 @@ export function TaskRecommendationCard({ recommendation }: Props) {
   const tone = confidenceTone(recommendation.confidence);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6">
-      <div className="flex items-center gap-2">
-        <Target className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-slate-900">Тип задачи</h2>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-2">
-        <span className="text-2xl font-semibold text-slate-900">{label}</span>
-        <span
-          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${tone.pillBg} ${tone.pillText}`}
-        >
-          уверенность {confidencePct}%
-        </span>
-        <span
-          className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600"
-          title={SOURCE_DESCRIPTION[recommendation.source]}
-        >
-          {SOURCE_LABEL[recommendation.source]}
-        </span>
-      </div>
-
-      <div
-        className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
-        aria-label={`Уверенность ${confidencePct}%`}
-      >
-        <div
-          className={`h-full rounded-full transition-[width] duration-500 ${tone.bar}`}
-          style={{ width: `${confidencePct}%` }}
-        />
-      </div>
+    <div>
+      <blockquote className="border-l-[3px] border-ink-700 pl-6">
+        <p className="font-serif text-[2rem] font-semibold leading-tight tracking-tight text-ink-900">
+          {label}
+        </p>
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1 font-sans text-xs uppercase tracking-wider">
+          <span className="text-paper-500">
+            CONFIDENCE{" "}
+            <span className={`ml-1 font-mono normal-case tracking-normal ${tone}`}>
+              {recommendation.confidence.toFixed(3)}
+            </span>
+            <span className="ml-1 font-mono normal-case tracking-normal text-paper-500">
+              ({confidencePct}%)
+            </span>
+          </span>
+          <span
+            className="text-paper-500"
+            title={SOURCE_DESCRIPTION[recommendation.source]}
+          >
+            SOURCE{" "}
+            <span className="ml-1 font-mono normal-case tracking-normal text-ink-700">
+              {SOURCE_LABEL[recommendation.source]}
+            </span>
+          </span>
+        </div>
+      </blockquote>
 
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-900"
+        className="mt-5 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 underline-offset-2 hover:underline"
       >
-        {expanded ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronRight className="h-4 w-4" />
-        )}
-        {expanded ? "Скрыть обоснование" : "Почему такая рекомендация?"}
+        {expanded ? "СКРЫТЬ ОБОСНОВАНИЕ" : "ПОЧЕМУ ТАКАЯ РЕКОМЕНДАЦИЯ →"}
       </button>
 
       {expanded && (
-        <div className="mt-3 space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+        <div className="mt-4 space-y-5 border-t border-paper-200 pt-4">
           {recommendation.applied_rules.length > 0 && (
             <div>
-              <h3 className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              <h3 className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
                 Применённые правила
               </h3>
-              <ul className="mt-2 space-y-2">
+              <ul className="mt-2 divide-y divide-paper-200 border-y border-paper-200">
                 {recommendation.applied_rules.map((rule) => (
                   <li
                     key={rule.code}
-                    className="rounded border border-slate-200 bg-white p-3 text-sm text-slate-800"
+                    className="flex flex-col gap-1 px-1 py-2 sm:flex-row sm:items-baseline sm:gap-4"
                   >
-                    <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">
+                    <span className="font-mono text-xs text-ink-700 sm:w-56 sm:shrink-0">
                       {rule.code}
                     </span>
-                    {rule.description}
+                    <span className="font-serif text-[0.9375rem] leading-relaxed text-paper-700">
+                      {rule.description}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -158,10 +129,10 @@ export function TaskRecommendationCard({ recommendation }: Props) {
 
           {recommendation.explanation && (
             <div>
-              <h3 className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              <h3 className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
                 Объяснение
               </h3>
-              <pre className="mt-2 whitespace-pre-wrap rounded border border-slate-200 bg-white p-3 font-sans text-sm text-slate-700">
+              <pre className="mt-2 whitespace-pre-wrap border-l-[3px] border-paper-300 bg-paper-100/60 px-4 py-3 font-serif text-[0.9375rem] leading-relaxed text-paper-700">
                 {recommendation.explanation}
               </pre>
             </div>
@@ -169,28 +140,25 @@ export function TaskRecommendationCard({ recommendation }: Props) {
 
           {recommendation.ml_probabilities && (
             <div>
-              <h3 className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Вероятности классов (ML)
+              <h3 className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+                Вероятности классов (ML-слой)
               </h3>
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-2 divide-y divide-paper-200 border-y border-paper-200">
                 {Object.entries(recommendation.ml_probabilities)
                   .sort((a, b) => b[1] - a[1])
                   .map(([cls, prob]) => (
                     <li
                       key={cls}
-                      className="flex items-center gap-3 text-sm text-slate-700"
+                      className="grid grid-cols-[1fr_auto] items-center gap-4 px-1 py-2"
                     >
-                      <span className="w-56 truncate font-mono text-xs">
+                      <span className="font-sans text-sm text-paper-700">
                         {TASK_TYPE_LABEL[cls as TaskTypeCode] ?? cls}
                       </span>
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
-                        <div
-                          className="h-full rounded-full bg-blue-500"
-                          style={{ width: `${Math.round(prob * 100)}%` }}
-                        />
-                      </div>
-                      <span className="w-10 text-right font-mono text-xs text-slate-600">
-                        {Math.round(prob * 100)}%
+                      <span className="font-mono text-xs text-paper-800">
+                        {prob.toFixed(3)}{" "}
+                        <span className="text-paper-500">
+                          ({Math.round(prob * 100)}%)
+                        </span>
                       </span>
                     </li>
                   ))}
@@ -199,6 +167,6 @@ export function TaskRecommendationCard({ recommendation }: Props) {
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }

@@ -1,12 +1,9 @@
+// Флаги качества данных — ruled-строки с 3px-полосой severity слева и
+// hairline-разделителем снизу. Группировка по severity, expandable
+// definition-list с context'ом в Mono.
+//
+// См. frontend/DESIGN_TOKENS.md, раздел 8.2.
 import { useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Info,
-  XCircle,
-} from "lucide-react";
 import type { QualityFlag, Severity } from "../../types/analysis";
 
 type Props = {
@@ -15,53 +12,52 @@ type Props = {
 
 const SEVERITY_ORDER: Severity[] = ["critical", "warning", "info"];
 
-const SEVERITY_LABELS: Record<Severity, string> = {
-  critical: "Критические проблемы",
+const SEVERITY_LABEL: Record<Severity, string> = {
+  critical: "Критические",
   warning: "Предупреждения",
   info: "Информация",
 };
 
-const SEVERITY_STYLES: Record<
-  Severity,
-  { border: string; bg: string; text: string; icon: typeof XCircle }
-> = {
-  critical: {
-    border: "border-red-300",
-    bg: "bg-red-50",
-    text: "text-red-900",
-    icon: XCircle,
-  },
-  warning: {
-    border: "border-amber-300",
-    bg: "bg-amber-50",
-    text: "text-amber-900",
-    icon: AlertTriangle,
-  },
-  info: {
-    border: "border-blue-300",
-    bg: "bg-blue-50",
-    text: "text-blue-900",
-    icon: Info,
-  },
+const SEVERITY_BADGE: Record<Severity, string> = {
+  critical: "CRIT",
+  warning: "WARN",
+  info: "INFO",
+};
+
+// Цвет рульки слева и текста бейджа. Тинт фона строки даём только для
+// critical — в остальных случаях фон остаётся paper.50, чтобы текст не
+// «терялся» на цветном поле (см. п. 7 манифеста — semantic-цвета как
+// отметки, а не заливки).
+const SEVERITY_RULE: Record<Severity, string> = {
+  critical: "border-critical-500",
+  warning: "border-warning-500",
+  info: "border-info-500",
+};
+
+const SEVERITY_TEXT: Record<Severity, string> = {
+  critical: "text-critical-700",
+  warning: "text-warning-700",
+  info: "text-info-700",
+};
+
+const SEVERITY_TINT: Record<Severity, string> = {
+  critical: "bg-critical-50/70",
+  warning: "bg-paper-50",
+  info: "bg-paper-50",
 };
 
 export function QualityFlags({ flags }: Props) {
   if (flags.length === 0) {
     return (
-      <section className="rounded-lg border border-emerald-300 bg-emerald-50 p-6">
-        <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-          <div>
-            <h2 className="text-lg font-semibold text-emerald-900">
-              Проблем не обнаружено
-            </h2>
-            <p className="mt-1 text-sm text-emerald-800">
-              Ни одно из 12 правил качества не сработало. Датасет готов к
-              использованию.
-            </p>
-          </div>
-        </div>
-      </section>
+      <div className="border-l-[3px] border-success-500 bg-paper-50 px-5 py-4">
+        <p className="font-sans text-xs font-medium uppercase tracking-wider text-success-700">
+          ОК · ПРОБЛЕМ НЕ ОБНАРУЖЕНО
+        </p>
+        <p className="mt-1 font-serif text-[0.9375rem] text-paper-700">
+          Ни одно из 12 правил качества не сработало. Датасет пригоден к
+          обучению.
+        </p>
+      </div>
     );
   }
 
@@ -75,84 +71,85 @@ export function QualityFlags({ flags }: Props) {
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6">
-      <h2 className="text-lg font-semibold text-slate-900">Качество данных</h2>
-      <p className="mt-1 text-sm text-slate-600">
-        Сработавших правил: <strong>{flags.length}</strong>
-      </p>
-
-      <div className="mt-4 space-y-6">
-        {SEVERITY_ORDER.map((sev) => {
-          const list = grouped[sev];
-          if (list.length === 0) return null;
-          return (
-            <div key={sev}>
-              <h3 className="text-sm font-medium uppercase tracking-wide text-slate-500">
-                {SEVERITY_LABELS[sev]} ({list.length})
-              </h3>
-              <div className="mt-2 space-y-2">
-                {list.map((flag, idx) => (
-                  <FlagCard key={`${sev}-${idx}`} flag={flag} />
-                ))}
-              </div>
+    <div className="space-y-8">
+      {SEVERITY_ORDER.map((sev) => {
+        const list = grouped[sev];
+        if (list.length === 0) return null;
+        return (
+          <div key={sev}>
+            <h3 className="mb-3 font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+              <span className={SEVERITY_TEXT[sev]}>{SEVERITY_LABEL[sev]}</span>
+              <span className="ml-2 font-mono normal-case tracking-normal text-paper-500">
+                ({list.length})
+              </span>
+            </h3>
+            <div className="border-y border-paper-200">
+              {list.map((flag, idx) => (
+                <FlagRow key={`${sev}-${idx}`} flag={flag} />
+              ))}
             </div>
-          );
-        })}
-      </div>
-    </section>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-function FlagCard({ flag }: { flag: QualityFlag }) {
+function FlagRow({ flag }: { flag: QualityFlag }) {
   const [expanded, setExpanded] = useState(false);
-  const styles = SEVERITY_STYLES[flag.severity];
-  const Icon = styles.icon;
   const hasContext = flag.context && Object.keys(flag.context).length > 0;
+  const sev = flag.severity;
 
   return (
-    <div className={`rounded-md border ${styles.border} ${styles.bg} p-4`}>
-      <div className="flex items-start gap-3">
-        <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${styles.text}`} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span
-              className={`rounded bg-white/80 px-1.5 py-0.5 text-xs font-mono font-medium ${styles.text}`}
-            >
-              {flag.rule_code}
-            </span>
-            <span className="text-xs text-slate-500">{flag.rule_name}</span>
-          </div>
-          <p className={`mt-1.5 text-sm ${styles.text}`}>{flag.message}</p>
-
-          {hasContext && (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${styles.text} hover:underline`}
-            >
-              {expanded ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
-              {expanded ? "Скрыть детали" : "Подробнее"}
-            </button>
-          )}
-
-          {expanded && hasContext && (
-            <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 rounded border border-white/60 bg-white/60 p-2 text-xs sm:grid-cols-2">
-              {Object.entries(flag.context!).map(([key, value]) => (
-                <div key={key} className="flex justify-between gap-2">
-                  <dt className="font-medium text-slate-700">{key}:</dt>
-                  <dd className="font-mono text-slate-900">
-                    {formatContextValue(value)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          )}
-        </div>
+    <div
+      className={`border-b border-paper-200 last:border-b-0 border-l-[3px] ${SEVERITY_RULE[sev]} ${SEVERITY_TINT[sev]} px-5 py-3`}
+    >
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span
+          className={`font-mono text-xs font-medium ${SEVERITY_TEXT[sev]}`}
+          aria-label={`severity: ${sev}`}
+        >
+          {SEVERITY_BADGE[sev]}
+        </span>
+        <span className="font-mono text-xs text-paper-700">
+          {flag.rule_code}
+        </span>
+        <span className="font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
+          {flag.rule_name}
+        </span>
       </div>
+
+      <p className="mt-2 font-serif text-[0.9375rem] leading-relaxed text-paper-700">
+        {flag.message}
+      </p>
+
+      {hasContext && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 underline-offset-2 hover:underline"
+        >
+          {expanded ? "СКРЫТЬ ДЕТАЛИ" : "ПОДРОБНЕЕ →"}
+        </button>
+      )}
+
+      {expanded && hasContext && (
+        <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-1.5 border-t border-paper-200 pt-3 sm:grid-cols-2">
+          {Object.entries(flag.context!).map(([key, value]) => (
+            <div
+              key={key}
+              className="flex justify-between gap-3 border-b border-dotted border-paper-200 pb-1 last:border-b-0"
+            >
+              <dt className="font-sans text-xs uppercase tracking-wider text-paper-500">
+                {key}
+              </dt>
+              <dd className="font-mono text-xs text-paper-800">
+                {formatContextValue(value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }

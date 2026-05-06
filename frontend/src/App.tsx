@@ -28,7 +28,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+      <div className="min-h-screen bg-paper-50 text-paper-700 flex flex-col">
         <Header />
         <main className="flex-1">
           <Routes>
@@ -77,7 +77,7 @@ export default function App() {
 
 function RouteSpinner() {
   return (
-    <div className="flex h-[60vh] items-center justify-center text-slate-500">
+    <div className="flex h-[60vh] items-center justify-center text-paper-500">
       <Loader2 className="h-6 w-6 animate-spin" />
     </div>
   );

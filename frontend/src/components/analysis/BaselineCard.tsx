@@ -1,13 +1,14 @@
+// Baseline: 4 состояния (not_started/running/done/failed) + таблица метрик
+// и список важности признаков.
+//
+// Стиль (Sprint 5, Phase 2): таблица — настоящая <table> с border-collapse и
+// hairline-руллями, без скруглений; кнопки в archive-стиле — paper.50 фон с
+// 1px ink.700-обводкой, на hover инверсия.
+//
+// См. frontend/DESIGN_TOKENS.md, раздел 8.4.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertOctagon,
-  FlaskConical,
-  Info,
-  Loader2,
-  Play,
-  RefreshCw,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { analysesApi } from "../../api/analyses";
 import { useBaselinePolling } from "../../hooks/useBaselinePolling";
 import type {
@@ -22,7 +23,6 @@ type Props = {
   taskType: string | undefined;
 };
 
-// Маппинг технических имён моделей и метрик в человеческие подписи.
 const MODEL_LABELS: Record<string, string> = {
   logistic_regression: "Logistic Regression",
   random_forest: "Random Forest",
@@ -42,24 +42,8 @@ const METRIC_LABELS: Record<string, string> = {
   r2: "R²",
 };
 
-// Не все метрики ограничены [0, 1] — для R² и ошибок (MAE/RMSE) форматируем
-// без процентов и не показываем «уверенность» как % шкалу.
-const PERCENT_METRICS = new Set([
-  "accuracy",
-  "precision",
-  "recall",
-  "f1",
-  "f1_macro",
-  "f1_weighted",
-  "roc_auc",
-]);
-
-function formatMetric(value: MetricValue, key: string): string {
+function formatMetric(value: MetricValue): string {
   if (!Number.isFinite(value.mean)) return "—";
-  if (PERCENT_METRICS.has(key)) {
-    return `${value.mean.toFixed(3)} ± ${value.std.toFixed(3)}`;
-  }
-  // Регрессионные метрики (mae/rmse/r2) — фиксированные 3 знака.
   return `${value.mean.toFixed(3)} ± ${value.std.toFixed(3)}`;
 }
 
@@ -72,8 +56,6 @@ export function BaselineCard({ analysisId, taskType }: Props) {
     mutationFn: () => analysesApi.startBaseline(analysisId),
     onMutate: () => setLocalError(null),
     onSuccess: (resp) => {
-      // Оптимистично подменяем кеш: сразу показываем running/done — не ждём
-      // следующего polling-тика. Polling быстро подхватит реальное состояние.
       queryClient.setQueryData<BaselineResponse>(["baseline", analysisId], {
         baseline_status: resp.baseline_status,
         baseline: null,
@@ -94,19 +76,8 @@ export function BaselineCard({ analysisId, taskType }: Props) {
   const status: BaselineStatus = data?.baseline_status ?? "not_started";
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6">
-      <div className="flex items-center gap-2">
-        <FlaskConical className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-slate-900">
-          Baseline-обучение
-        </h2>
-      </div>
-
-      {localError && (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          {localError}
-        </div>
-      )}
+    <div>
+      {localError && <InlineError message={localError} />}
 
       {status === "not_started" && (
         <NotStartedView
@@ -129,13 +100,9 @@ export function BaselineCard({ analysisId, taskType }: Props) {
           isRetrying={startMutation.isPending}
         />
       )}
-    </section>
+    </div>
   );
 }
-
-// =============================================================================
-//                               СОСТОЯНИЯ
-// =============================================================================
 
 function NotStartedView({
   taskType,
@@ -149,47 +116,46 @@ function NotStartedView({
   const isStub = taskType === "CLUSTERING" || taskType === "NOT_READY";
 
   return (
-    <div className="mt-4 space-y-4">
-      <p className="text-sm text-slate-600">
+    <div className="space-y-4">
+      <p className="font-serif text-[0.9375rem] leading-relaxed text-paper-600">
         Обучим две baseline-модели (линейная + RandomForest) с 5-fold
         кросс-валидацией. Колонки с подозрением на утечку исключаются
         автоматически. Обычно занимает 5–15 секунд.
       </p>
 
       {isStub && (
-        <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            Для текущего типа задачи baseline не обучается — результатом будет
-            краткая текстовая рекомендация по алгоритмам.
-          </span>
+        <div className="border-l-[3px] border-info-500 bg-paper-50 px-4 py-3 font-serif text-sm leading-relaxed text-paper-700">
+          <span className="font-sans text-xs font-medium uppercase tracking-wider text-info-700">
+            ⓘ INFO
+          </span>{" "}
+          Для текущего типа задачи baseline не обучается — результатом будет
+          краткая текстовая рекомендация по алгоритмам.
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={onStart}
-        disabled={isStarting}
-        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
-      >
+      <ArchiveButton onClick={onStart} disabled={isStarting}>
         {isStarting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ЗАПУСК…
+          </>
         ) : (
-          <Play className="h-4 w-4" />
+          "ОБУЧИТЬ BASELINE"
         )}
-        Обучить baseline
-      </button>
+      </ArchiveButton>
     </div>
   );
 }
 
 function RunningView() {
   return (
-    <div className="mt-4 flex items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-4">
-      <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-blue-600" />
-      <div className="text-sm">
-        <p className="font-medium text-blue-900">Идёт обучение</p>
-        <p className="mt-1 text-blue-800">
+    <div className="flex items-start gap-3 border-l-[3px] border-info-500 bg-paper-50 px-4 py-3">
+      <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-info-500" />
+      <div>
+        <p className="font-sans text-xs font-medium uppercase tracking-wider text-info-700">
+          ИДЁТ ОБУЧЕНИЕ
+        </p>
+        <p className="mt-1 font-serif text-sm leading-relaxed text-paper-700">
           Препроцессинг, кросс-валидация, расчёт важности признаков. Обычно
           5–15 секунд.
         </p>
@@ -208,48 +174,38 @@ function FailedView({
   isRetrying: boolean;
 }) {
   return (
-    <div className="mt-4 rounded-md border border-red-300 bg-red-50 p-4">
-      <div className="flex items-start gap-3">
-        <AlertOctagon className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-red-900">
-            Обучение завершилось с ошибкой
-          </p>
-          <p className="mt-1 break-words text-sm text-red-800">
-            {errorMessage || "Внутренняя ошибка. Попробуйте ещё раз."}
-          </p>
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={isRetrying}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isRetrying ? (
+    <div className="border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-3">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-critical-700">
+        FAIL · ОБУЧЕНИЕ ЗАВЕРШИЛОСЬ С ОШИБКОЙ
+      </p>
+      <p className="mt-1 break-words font-serif text-sm leading-relaxed text-paper-700">
+        {errorMessage || "Внутренняя ошибка. Попробуйте ещё раз."}
+      </p>
+      <div className="mt-3">
+        <ArchiveButton onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? (
+            <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            Попробовать снова
-          </button>
-        </div>
+              ПОВТОР…
+            </>
+          ) : (
+            "ПОПРОБОВАТЬ СНОВА"
+          )}
+        </ArchiveButton>
       </div>
     </div>
   );
 }
 
 function DoneView({ result }: { result: BaselineResult }) {
-  // CLUSTERING / NOT_READY: backend кладёт `note` вместо реальных моделей.
   if (result.note && result.models.length === 0) {
     return (
-      <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-        <Info className="mr-2 inline-block h-4 w-4 align-text-bottom text-slate-500" />
+      <div className="border-l-[3px] border-paper-400 bg-paper-100/60 px-4 py-3 font-serif text-sm leading-relaxed text-paper-700">
         {result.note}
       </div>
     );
   }
 
-  // Универсальная сборка таблицы: строки — модели, столбцы — все встретившиеся
-  // метрики (например, BINARY имеет roc_auc, MULTICLASS — нет).
   const allMetricKeys = Array.from(
     new Set(
       result.models.flatMap((m) => Object.keys(result.metrics[m] ?? {})),
@@ -262,36 +218,25 @@ function DoneView({ result }: { result: BaselineResult }) {
   const maxImportance = importanceEntries[0]?.[1] ?? 1;
 
   return (
-    <div className="mt-4 space-y-6">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600">
-        <span>
-          Строк в обучении:{" "}
-          <span className="font-mono text-slate-800">{result.n_rows_used}</span>
-        </span>
-        <span>
-          Признаков:{" "}
-          <span className="font-mono text-slate-800">
-            {result.n_features_used}
-          </span>
-        </span>
+    <div className="space-y-6">
+      <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
+        <Field label="Строк в обучении" value={result.n_rows_used} />
+        <Field label="Признаков использовано" value={result.n_features_used} />
         {result.excluded_columns_due_to_leakage.length > 0 && (
-          <span>
-            Исключено по leakage:{" "}
-            <span className="font-mono text-slate-800">
-              {result.excluded_columns_due_to_leakage.join(", ")}
-            </span>
-          </span>
+          <Field
+            label="Исключено по leakage"
+            value={result.excluded_columns_due_to_leakage.join(", ")}
+            full
+          />
         )}
-      </div>
+      </dl>
 
       <div>
-        <h3 className="text-sm font-medium uppercase tracking-wide text-slate-500">
-          Метрики моделей
-        </h3>
-        <div className="mt-2 overflow-x-auto rounded-md border border-slate-200">
+        <SubsectionLabel>Метрики моделей</SubsectionLabel>
+        <div className="mt-2 overflow-x-auto border border-paper-300">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-paper-300 bg-paper-100/60 text-left font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
                 <th className="px-3 py-2 font-medium">Модель</th>
                 {allMetricKeys.map((key) => (
                   <th key={key} className="px-3 py-2 font-medium">
@@ -304,9 +249,9 @@ function DoneView({ result }: { result: BaselineResult }) {
               {result.models.map((model) => (
                 <tr
                   key={model}
-                  className="border-t border-slate-200 align-top"
+                  className="border-b border-paper-200 align-top last:border-b-0"
                 >
-                  <td className="px-3 py-2 font-medium text-slate-900">
+                  <td className="px-3 py-2 font-sans text-sm text-paper-800">
                     {MODEL_LABELS[model] ?? model}
                   </td>
                   {allMetricKeys.map((key) => {
@@ -314,9 +259,9 @@ function DoneView({ result }: { result: BaselineResult }) {
                     return (
                       <td
                         key={key}
-                        className="px-3 py-2 font-mono text-xs text-slate-700"
+                        className="px-3 py-2 font-mono text-xs text-paper-700"
                       >
-                        {value ? formatMetric(value, key) : "—"}
+                        {value ? formatMetric(value) : "—"}
                       </td>
                     );
                   })}
@@ -329,45 +274,119 @@ function DoneView({ result }: { result: BaselineResult }) {
 
       {importanceEntries.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium uppercase tracking-wide text-slate-500">
-            Важность признаков (топ-10)
-          </h3>
-          <ul className="mt-3 space-y-2">
-            {importanceEntries.map(([name, importance]) => {
-              const widthPct = Math.max(
-                3,
-                Math.round((importance / maxImportance) * 100),
-              );
-              return (
-                <li key={name} className="flex items-center gap-3 text-sm">
-                  <span
-                    className="w-44 shrink-0 truncate text-slate-700"
-                    title={name}
-                  >
-                    {name}
-                  </span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-blue-500"
-                      style={{ width: `${widthPct}%` }}
-                    />
-                  </div>
-                  <span className="w-14 text-right font-mono text-xs text-slate-600">
-                    {importance.toFixed(3)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <SubsectionLabel>Важность признаков (топ-{importanceEntries.length})</SubsectionLabel>
+          <div className="mt-2 overflow-x-auto border border-paper-300">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-paper-300 bg-paper-100/60 text-left font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
+                  <th className="w-10 px-3 py-2 font-medium text-right">#</th>
+                  <th className="px-3 py-2 font-medium">Признак</th>
+                  <th className="px-3 py-2 font-medium text-right">Важность</th>
+                  <th className="w-1/3 px-3 py-2 font-medium">Шкала</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importanceEntries.map(([name, importance], idx) => {
+                  const widthPct = Math.max(
+                    2,
+                    Math.round((importance / maxImportance) * 100),
+                  );
+                  return (
+                    <tr
+                      key={name}
+                      className="border-b border-paper-200 last:border-b-0"
+                    >
+                      <td className="px-3 py-2 text-right font-mono text-xs text-paper-400">
+                        {String(idx + 1).padStart(2, "0")}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs text-paper-800">
+                        {name}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs text-paper-700">
+                        {importance.toFixed(3)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="h-1.5 bg-paper-200">
+                          <div
+                            className="h-full bg-ink-700"
+                            style={{ width: `${widthPct}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      <div className="border-t border-slate-200 pt-3 text-xs text-slate-500">
-        Обучено:{" "}
-        <span className="font-mono text-slate-700">
+      <p className="font-sans text-xs uppercase tracking-wider text-paper-500">
+        ОБУЧЕНО:{" "}
+        <span className="font-mono normal-case tracking-normal text-paper-700">
           {new Date(result.trained_at).toLocaleString("ru-RU")}
         </span>
-      </div>
+      </p>
     </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  full = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  full?: boolean;
+}) {
+  return (
+    <div className={full ? "sm:col-span-2" : ""}>
+      <dt className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+        {label}
+      </dt>
+      <dd className="mt-0.5 font-mono text-sm text-paper-800">{value}</dd>
+    </div>
+  );
+}
+
+function SubsectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+      {children}
+    </h3>
+  );
+}
+
+function InlineError({ message }: { message: string }) {
+  return (
+    <div className="mb-4 border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
+      {message}
+    </div>
+  );
+}
+
+// Архивная кнопка — paper.50 фон + 1px ink.700 обводка, hover инвертирует.
+// Используется в нескольких analysis-компонентах; локальная (не экспортируем
+// общий UI-примитив до Phase 3 — пилот не делает раскат шире страницы).
+function ArchiveButton({
+  children,
+  onClick,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-2 border border-ink-700 bg-paper-50 px-4 py-2 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 transition-colors hover:bg-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-paper-50 disabled:hover:text-ink-700"
+    >
+      {children}
+    </button>
   );
 }

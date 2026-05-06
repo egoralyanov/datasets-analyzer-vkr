@@ -1,6 +1,9 @@
 // Шапка сайта с логотипом и навигацией. Показывается на всех страницах.
-import { Link, useNavigate } from "react-router-dom";
-import { LogOut, User as UserIcon } from "lucide-react";
+//
+// Стиль (Sprint 5, Phase 2): scientific/archive — двойная рулька снизу,
+// uppercase tracking-навигация, активная ссылка через подчёркивание, никаких
+// иконок и pill-кнопок. См. frontend/DESIGN_TOKENS.md, раздел 8.1.
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import { authApi } from "../../api/auth";
 
@@ -20,68 +23,71 @@ export function Header() {
   };
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link to="/" className="text-lg font-semibold text-slate-900">
-          Анализатор
+    <header
+      className="border-b-[3px] border-double border-paper-400 bg-paper-50"
+    >
+      <div className="mx-auto flex max-w-[1100px] items-end justify-between gap-8 px-8 py-5 lg:px-16">
+        <Link to="/" className="block leading-tight">
+          <span className="block font-serif text-[1.75rem] font-bold tracking-tight text-paper-900">
+            АНАЛИЗАТОР
+          </span>
+          <span className="mt-1 block font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+            Интеллектуальная система анализа наборов данных
+          </span>
         </Link>
-        <nav className="flex items-center gap-3">
+
+        <nav className="flex items-end gap-5 pb-1 text-xs font-sans font-medium uppercase tracking-wider">
           {user ? (
             <>
-              <Link
-                to="/upload"
-                className="text-sm text-slate-700 hover:text-slate-900"
-              >
-                Мои датасеты
-              </Link>
-              <Link
-                to="/history"
-                className="text-sm text-slate-700 hover:text-slate-900"
-              >
-                История
-              </Link>
-              {user.role === "admin" && (
-                <Link
-                  to="/admin"
-                  className="text-sm text-slate-700 hover:text-slate-900"
-                >
-                  Админ
-                </Link>
-              )}
-              <Link
-                to="/profile"
-                className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
-              >
-                <UserIcon className="h-4 w-4" />
-                {user.username}
-              </Link>
+              <NavItem to="/upload" label="Загрузить" />
+              <NavItem to="/history" label="История" />
+              {user.role === "admin" && <NavItem to="/admin" label="Админ" />}
+              <NavItem to="/profile" label={user.username} mono />
               <button
                 type="button"
                 onClick={onLogout}
-                className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
+                className="text-paper-600 transition-colors hover:text-ink-700"
               >
-                <LogOut className="h-4 w-4" />
                 Выйти
               </button>
             </>
           ) : (
             <>
-              <Link
-                to="/login"
-                className="text-sm text-slate-700 hover:text-slate-900"
-              >
-                Войти
-              </Link>
-              <Link
-                to="/register"
-                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Регистрация
-              </Link>
+              <NavItem to="/login" label="Войти" />
+              <NavItem to="/register" label="Регистрация" />
             </>
           )}
         </nav>
       </div>
     </header>
+  );
+}
+
+function NavItem({
+  to,
+  label,
+  mono = false,
+}: {
+  to: string;
+  label: string;
+  mono?: boolean;
+}) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        [
+          mono ? "font-mono normal-case tracking-normal" : "",
+          "border-b-2 pb-0.5 transition-colors",
+          isActive
+            ? "border-ink-700 text-ink-900"
+            : "border-transparent text-paper-600 hover:text-ink-700",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      }
+    >
+      {label}
+    </NavLink>
   );
 }

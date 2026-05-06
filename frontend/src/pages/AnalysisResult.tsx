@@ -1,7 +1,14 @@
+// Страница результата анализа.
+//
+// Стиль (Sprint 5, Phase 2): макет научной статьи — «specimen header» сверху
+// с метаданными в формате definition-list, ниже — пронумерованные §-секции
+// (§1 ПРОФАЙЛ, §2 КАЧЕСТВО, ...) с серифным заголовком и hairline-руллёй.
+// Контейнер 1100px (узкий «журнальный» column-width).
+// См. frontend/DESIGN_TOKENS.md, разделы 3 и 8.4.
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, XCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { analysesApi } from "../api/analyses";
 import { datasetsApi } from "../api/datasets";
 import { useAnalysisPolling } from "../hooks/useAnalysisPolling";
@@ -50,24 +57,46 @@ export function AnalysisResult() {
     return <ErrorBox message="Не удалось получить статус анализа." />;
   }
 
+  const finishedAt = analysis.finished_at
+    ? new Date(analysis.finished_at).toLocaleString("ru-RU")
+    : null;
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="mx-auto max-w-[1100px] px-8 py-12 lg:px-16">
       <button
         type="button"
         onClick={() => navigate("/upload")}
-        className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+        className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500 underline-offset-2 hover:text-ink-700 hover:underline"
       >
-        <ArrowLeft className="h-4 w-4" />
-        Назад к датасетам
+        ← НАЗАД К ДАТАСЕТАМ
       </button>
 
-      <h1 className="mt-3 text-2xl font-semibold text-slate-900">
-        Результат анализа
-      </h1>
-      <p className="mt-1 text-sm text-slate-600">
-        ID анализа:{" "}
-        <span className="font-mono text-xs text-slate-700">{analysis.id}</span>
-      </p>
+      <div className="mt-6">
+        <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+          ОТЧЁТ ОБ АНАЛИЗЕ ДАТАСЕТА
+        </p>
+        <h1 className="mt-2 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
+          {dataset.data?.original_filename ?? "Анализ"}
+        </h1>
+        <dl className="mt-5 grid grid-cols-1 gap-x-8 gap-y-1 border-y border-paper-300 py-3 sm:grid-cols-[10rem_1fr_10rem_1fr]">
+          <SpecimenField label="ID анализа" value={analysis.id} mono />
+          <SpecimenField
+            label="Статус"
+            value={analysis.status.toUpperCase()}
+            mono
+          />
+          {finishedAt && (
+            <SpecimenField label="Завершён" value={finishedAt} mono />
+          )}
+          {analysis.target_column && (
+            <SpecimenField
+              label="Target"
+              value={`«${analysis.target_column}»`}
+              mono
+            />
+          )}
+        </dl>
+      </div>
 
       {(analysis.status === "pending" || analysis.status === "running") && (
         <RunningView />
@@ -78,26 +107,54 @@ export function AnalysisResult() {
       )}
 
       {analysis.status === "done" && result.data && (
-        <div className="mt-6 space-y-6">
-          <DatasetSummary
-            meta={result.data.meta_features}
-            filename={dataset.data?.original_filename}
-            targetColumn={analysis.target_column}
-          />
-          <QualityFlags flags={result.data.flags} />
-          <Distributions meta={result.data.meta_features} />
-          <TaskRecommendationCard
-            recommendation={result.data.task_recommendation}
-          />
-          <SimilarDatasetsCard analysisId={id} />
-          <BaselineCard
-            analysisId={id}
-            taskType={result.data.task_recommendation?.task_type_code}
-          />
-          <ReportDownloadCard
-            analysisId={id}
-            analysisStatus={analysis.status}
-          />
+        <div className="mt-10 space-y-12">
+          <Section number={1} title="Профайл данных">
+            <DatasetSummary
+              meta={result.data.meta_features}
+              filename={dataset.data?.original_filename}
+              targetColumn={analysis.target_column}
+            />
+          </Section>
+
+          <Section
+            number={2}
+            title="Качество данных"
+            note={
+              result.data.flags.length > 0
+                ? `${result.data.flags.length} замечаний`
+                : "без замечаний"
+            }
+          >
+            <QualityFlags flags={result.data.flags} />
+          </Section>
+
+          <Section number={3} title="Распределения">
+            <Distributions meta={result.data.meta_features} />
+          </Section>
+
+          <Section number={4} title="Рекомендация типа задачи">
+            <TaskRecommendationCard
+              recommendation={result.data.task_recommendation}
+            />
+          </Section>
+
+          <Section number={5} title="Похожие датасеты">
+            <SimilarDatasetsCard analysisId={id} />
+          </Section>
+
+          <Section number={6} title="Базовая модель">
+            <BaselineCard
+              analysisId={id}
+              taskType={result.data.task_recommendation?.task_type_code}
+            />
+          </Section>
+
+          <Section number={7} title="PDF-отчёт">
+            <ReportDownloadCard
+              analysisId={id}
+              analysisStatus={analysis.status}
+            />
+          </Section>
         </div>
       )}
 
@@ -108,15 +165,75 @@ export function AnalysisResult() {
   );
 }
 
+function Section({
+  number,
+  title,
+  note,
+  children,
+}: {
+  number: number;
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <header className="mb-5 flex items-baseline justify-between gap-4 border-b border-paper-300 pb-2">
+        <h2 className="flex items-baseline gap-3 font-serif text-[1.5rem] font-semibold leading-snug tracking-tight text-paper-900">
+          <span className="font-sans text-base font-medium text-paper-400">
+            §{number}
+          </span>
+          {title}
+        </h2>
+        {note && (
+          <span className="font-sans text-xs uppercase tracking-wider text-paper-500">
+            {note}
+          </span>
+        )}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function SpecimenField({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline gap-3 py-1">
+      <dt className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+        {label}
+      </dt>
+      <dd
+        className={`text-sm text-paper-800 ${
+          mono ? "font-mono text-xs" : "font-sans"
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function RunningView() {
   return (
-    <div className="mt-8 flex flex-col items-center gap-4 rounded-lg border border-slate-200 bg-white p-12">
-      <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-      <p className="text-lg font-medium text-slate-900">Идёт анализ…</p>
-      <p className="text-sm text-slate-600">
-        Профайлер вычисляет meta-features, после чего применятся 12 правил
-        качества. Обычно это занимает 5–30 секунд.
-      </p>
+    <div className="mt-8 border border-paper-300 bg-paper-50 px-12 py-16">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-ink-700" />
+        <p className="font-serif text-[1.25rem] font-semibold text-paper-900">
+          Идёт анализ…
+        </p>
+        <p className="max-w-md font-serif text-sm leading-relaxed text-paper-600">
+          Профайлер вычисляет meta-features, после чего применяются 12 правил
+          качества. Обычно это занимает 5–30 секунд.
+        </p>
+      </div>
     </div>
   );
 }
@@ -124,34 +241,29 @@ function RunningView() {
 function FailedView({ errorMessage }: { errorMessage: string | null }) {
   const navigate = useNavigate();
   return (
-    <div className="mt-6 rounded-lg border border-red-300 bg-red-50 p-6">
-      <div className="flex items-start gap-3">
-        <XCircle className="mt-0.5 h-6 w-6 shrink-0 text-red-600" />
-        <div>
-          <h2 className="text-lg font-semibold text-red-900">
-            Анализ завершился с ошибкой
-          </h2>
-          <p className="mt-2 text-sm text-red-800">
-            {errorMessage || "Внутренняя ошибка сервера. Попробуйте ещё раз."}
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate("/upload")}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
-          >
-            <ArrowLeft className="h-4 w-4" />К датасетам
-          </button>
-        </div>
-      </div>
+    <div className="mt-8 border-l-[3px] border-critical-500 bg-critical-50/70 px-5 py-4">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-critical-700">
+        FAIL · АНАЛИЗ ЗАВЕРШИЛСЯ С ОШИБКОЙ
+      </p>
+      <p className="mt-2 font-serif text-[0.9375rem] leading-relaxed text-paper-700">
+        {errorMessage || "Внутренняя ошибка сервера. Попробуйте ещё раз."}
+      </p>
+      <button
+        type="button"
+        onClick={() => navigate("/upload")}
+        className="mt-3 inline-flex items-center gap-2 border border-ink-700 bg-paper-50 px-4 py-2 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 transition-colors hover:bg-ink-700 hover:text-paper-50"
+      >
+        ← К ДАТАСЕТАМ
+      </button>
     </div>
   );
 }
 
 function SpinnerBox({ label }: { label: string }) {
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12">
-      <div className="flex items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white p-8 text-slate-600">
-        <Loader2 className="h-5 w-5 animate-spin" />
+    <div className="mx-auto max-w-[1100px] px-8 py-16 lg:px-16">
+      <div className="flex items-center justify-center gap-3 border border-paper-300 bg-paper-50 p-8 font-sans text-sm text-paper-600">
+        <Loader2 className="h-5 w-5 animate-spin text-ink-700" />
         <span>{label}</span>
       </div>
     </div>
@@ -160,8 +272,8 @@ function SpinnerBox({ label }: { label: string }) {
 
 function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12">
-      <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+    <div className="mx-auto max-w-[1100px] px-8 py-16 lg:px-16">
+      <div className="border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-3 font-serif text-sm text-paper-700">
         {message}
       </div>
     </div>

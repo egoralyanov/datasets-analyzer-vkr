@@ -1,6 +1,5 @@
 // Карточка генерации и скачивания PDF-отчёта по анализу. Размещается
-// последней в цепочке AnalysisResult (после BaselineCard) — семантически
-// PDF-отчёт это финальный шаг работы с анализом.
+// последней в цепочке AnalysisResult — семантически финальный шаг.
 //
 // Состояния (local):
 //   idle       — reportId === null, никто ещё не нажимал «Сгенерировать».
@@ -10,18 +9,16 @@
 //
 // Известное ограничение: при перезагрузке страницы компонент стартует в idle
 // даже если у анализа уже есть готовый success-отчёт в БД. Бэк не отдаёт
-// «последний report для analysis_id» (нет такого эндпоинта). 90% сценариев
-// закрываются через 409 + reason="report_in_progress" — берём report_id
-// из тела ответа и подцепляемся к polling. Edge-case «есть готовый PDF за
-// прошлую сессию» решается перегенерацией. Закрытие — направление развития.
+// «последний report для analysis_id». 90% сценариев закрываются через 409 +
+// reason="report_in_progress" — берём report_id и подцепляемся к polling.
 //
-// Frontend-тесты пока не настроены (Vitest/Testing Library не подключены),
-// поэтому для этого компонента покрытия нет. TODO: добавить тест на смену
-// состояний при настройке тестовой инфраструктуры.
+// Стиль (Sprint 5, Phase 2): архивная карточка с hairline-обводкой; кнопки
+// в archive-стиле (paper.50 фон, 1px ink.700 обводка, инверсия на hover).
+// См. frontend/DESIGN_TOKENS.md.
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
-import { Download, FileText, Loader2, Play, RefreshCw, XCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { reportsApi } from "../../api/reports";
 import { useReportPolling } from "../../hooks/useReportPolling";
 import type { ReportConflictResponse, ReportStatus } from "../../types/report";
@@ -48,7 +45,6 @@ export function ReportDownloadCard({ analysisId, analysisStatus }: Props) {
     onError: (err: unknown) => {
       const axiosErr = err as AxiosError<ReportConflictResponse>;
       const conflict = axiosErr.response?.data;
-      // 409 + report_in_progress: подцепляемся к polling существующего отчёта.
       if (
         axiosErr.response?.status === 409 &&
         conflict?.reason === "report_in_progress" &&
@@ -57,9 +53,6 @@ export function ReportDownloadCard({ analysisId, analysisStatus }: Props) {
         setReportId(conflict.report_id);
         return;
       }
-      // Прочие ошибки — кратковременно показываем; кнопка disabled должна
-      // была это предотвратить, но если как-то прошло — даём пользователю
-      // обратную связь, не висим в немом отказе.
       const message =
         conflict?.detail ??
         (err instanceof Error
@@ -93,14 +86,9 @@ export function ReportDownloadCard({ analysisId, analysisStatus }: Props) {
   const startDisabled = analysisStatus !== "done" || startMutation.isPending;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6">
-      <div className="flex items-center gap-2">
-        <FileText className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-slate-900">PDF-отчёт</h2>
-      </div>
-
+    <div>
       {localError && (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div className="mb-4 border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
           {localError}
         </div>
       )}
@@ -130,21 +118,15 @@ export function ReportDownloadCard({ analysisId, analysisStatus }: Props) {
         <FailedView
           errorMessage={polling.data?.error ?? null}
           onRetry={() => {
-            // Новый Report — старый failed остаётся в БД (тот же паттерн,
-            // что в BaselineCard для retry).
             setReportId(null);
             startMutation.mutate();
           }}
           isRetrying={startMutation.isPending}
         />
       )}
-    </section>
+    </div>
   );
 }
-
-// =============================================================================
-//                               СОСТОЯНИЯ
-// =============================================================================
 
 function IdleView({
   onStart,
@@ -158,27 +140,23 @@ function IdleView({
   analysisStatus: AnalysisStatus;
 }) {
   return (
-    <div className="mt-4 space-y-4">
-      <p className="text-sm text-slate-600">
+    <div className="space-y-4">
+      <p className="font-serif text-[0.9375rem] leading-relaxed text-paper-600">
         Сводка датасета, флаги качества, распределения, рекомендация и метрики
-        baseline в одном PDF — удобно сохранить или показать руководителю.
-        Обычно занимает 15–30 секунд.
+        baseline в одном PDF. Обычно занимает 15–30 секунд.
       </p>
-      <button
-        type="button"
-        onClick={onStart}
-        disabled={disabled}
-        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
-      >
+      <ArchiveButton onClick={onStart} disabled={disabled}>
         {isStarting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ЗАПУСК…
+          </>
         ) : (
-          <Play className="h-4 w-4" />
+          "СГЕНЕРИРОВАТЬ ОТЧЁТ"
         )}
-        Сгенерировать отчёт
-      </button>
+      </ArchiveButton>
       {analysisStatus !== "done" && (
-        <p className="text-xs text-slate-500">
+        <p className="font-sans text-xs text-paper-500">
           Кнопка станет активной после завершения анализа.
         </p>
       )}
@@ -188,11 +166,13 @@ function IdleView({
 
 function GeneratingView() {
   return (
-    <div className="mt-4 flex items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-4">
-      <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-blue-600" />
-      <div className="text-sm">
-        <p className="font-medium text-blue-900">Генерация отчёта…</p>
-        <p className="mt-1 text-blue-800">
+    <div className="flex items-start gap-3 border-l-[3px] border-info-500 bg-paper-50 px-4 py-3">
+      <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-info-500" />
+      <div>
+        <p className="font-sans text-xs font-medium uppercase tracking-wider text-info-700">
+          ГЕНЕРАЦИЯ ОТЧЁТА
+        </p>
+        <p className="mt-1 font-serif text-sm leading-relaxed text-paper-700">
           Рендерим графики matplotlib и собираем PDF через WeasyPrint. Обычно
           15–30 секунд.
         </p>
@@ -211,29 +191,26 @@ function ReadyView({
   fileSizeBytes: number | null;
 }) {
   return (
-    <div className="mt-4 space-y-3">
-      <p className="text-sm text-slate-700">
+    <div className="space-y-3">
+      <p className="font-serif text-[0.9375rem] leading-relaxed text-paper-700">
         Отчёт готов
-        {fileSizeBytes ? (
-          <span className="ml-1 text-slate-500">
+        {fileSizeBytes !== null && (
+          <span className="ml-1 font-mono text-sm text-paper-500">
             ({formatFileSize(fileSizeBytes)})
           </span>
-        ) : null}
+        )}
         .
       </p>
-      <button
-        type="button"
-        onClick={onDownload}
-        disabled={isDownloading}
-        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
-      >
+      <ArchiveButton onClick={onDownload} disabled={isDownloading}>
         {isDownloading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            СКАЧИВАНИЕ…
+          </>
         ) : (
-          <Download className="h-4 w-4" />
+          "СКАЧАТЬ PDF"
         )}
-        Скачать PDF
-      </button>
+      </ArchiveButton>
     </div>
   );
 }
@@ -248,30 +225,24 @@ function FailedView({
   isRetrying: boolean;
 }) {
   return (
-    <div className="mt-4 rounded-md border border-red-300 bg-red-50 p-4">
-      <div className="flex items-start gap-3">
-        <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-red-900">
-            Генерация завершилась с ошибкой
-          </p>
-          <p className="mt-1 break-words text-sm text-red-800">
-            {errorMessage || "Внутренняя ошибка. Попробуйте ещё раз."}
-          </p>
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={isRetrying}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isRetrying ? (
+    <div className="border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-3">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-critical-700">
+        FAIL · ГЕНЕРАЦИЯ ЗАВЕРШИЛАСЬ С ОШИБКОЙ
+      </p>
+      <p className="mt-1 break-words font-serif text-sm leading-relaxed text-paper-700">
+        {errorMessage || "Внутренняя ошибка. Попробуйте ещё раз."}
+      </p>
+      <div className="mt-3">
+        <ArchiveButton onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? (
+            <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            Попробовать снова
-          </button>
-        </div>
+              ПОВТОР…
+            </>
+          ) : (
+            "ПОПРОБОВАТЬ СНОВА"
+          )}
+        </ArchiveButton>
       </div>
     </div>
   );
@@ -281,4 +252,25 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} МБ`;
+}
+
+function ArchiveButton({
+  children,
+  onClick,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-2 border border-ink-700 bg-paper-50 px-4 py-2 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 transition-colors hover:bg-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-paper-50 disabled:hover:text-ink-700"
+    >
+      {children}
+    </button>
+  );
 }
