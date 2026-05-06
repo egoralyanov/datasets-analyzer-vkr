@@ -8,41 +8,318 @@
 // Авторизованный пользователь обслуживается отдельной веткой (см. Phase 3.4) —
 // hero сворачивается, вместо демо появляется dashboard.
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "../store/authStore";
+import { datasetsApi } from "../api/datasets";
+import { analysesApi } from "../api/analyses";
+import { formatNumber } from "../lib/format";
+import type { TaskTypeCode } from "../types/analysis";
 
 export function Landing() {
   const user = useAuthStore((s) => s.user);
 
   if (user) {
-    return <AuthenticatedStub />;
+    return <AuthenticatedDashboard />;
   }
 
   return <GuestLanding />;
 }
 
-// Phase 3.3: временная заглушка для авторизованного состояния — будет
-// переписана в Phase 3.4 как полноценный dashboard. Сохраняет привычный
-// сценарий «есть кнопка → перейти в загрузку», чтобы не блокировать рабочий
-// поток между шагами.
-function AuthenticatedStub() {
+const TASK_TYPE_LABEL: Record<TaskTypeCode, string> = {
+  BINARY_CLASSIFICATION: "Бинарная классификация",
+  MULTICLASS_CLASSIFICATION: "Многоклассовая классификация",
+  REGRESSION: "Регрессия",
+  CLUSTERING: "Кластеризация",
+  NOT_READY: "Данные не готовы для ML",
+};
+
+// Dashboard для авторизованного пользователя. Использует существующие
+// эндпоинты: datasetsApi.list (полный список — берём длину) и
+// analysesApi.list({page:1,size:1}) — даёт total для счётчика и items[0]
+// как «последний анализ» (бэк сортирует started_at DESC).
+//
+// Onboarding-режим (datasets=0 и analyses=0) — большая CTA, без счётчиков.
+function AuthenticatedDashboard() {
+  const datasetsQuery = useQuery({
+    queryKey: ["datasets"],
+    queryFn: () => datasetsApi.list(),
+  });
+  const analysesQuery = useQuery({
+    queryKey: ["analyses-latest"],
+    queryFn: () => analysesApi.list({ page: 1, size: 1 }),
+  });
+
+  const datasetsCount = datasetsQuery.data?.length ?? null;
+  const analysesTotal = analysesQuery.data?.total ?? null;
+  const latestAnalysis = analysesQuery.data?.items?.[0] ?? null;
+
+  const isLoading = datasetsQuery.isLoading || analysesQuery.isLoading;
+  const isOnboarding =
+    !isLoading && datasetsCount === 0 && analysesTotal === 0;
+
   return (
     <div className="mx-auto max-w-[1100px] px-8 py-16 lg:px-16">
+      {isOnboarding ? (
+        <OnboardingHero />
+      ) : (
+        <DashboardView
+          isLoading={isLoading}
+          datasetsCount={datasetsCount}
+          analysesTotal={analysesTotal}
+          latestAnalysis={latestAnalysis}
+        />
+      )}
+    </div>
+  );
+}
+
+function OnboardingHero() {
+  return (
+    <div>
       <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
-        АНАЛИЗАТОР · ВЫ ВОШЛИ
+        ДОБРО ПОЖАЛОВАТЬ В АНАЛИЗАТОР
       </p>
-      <h1 className="mt-3 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
-        Готовы к анализу
+      <h1 className="mt-3 max-w-2xl font-serif text-[2.5rem] font-bold leading-tight tracking-tight text-paper-900">
+        Загрузите первый датасет
       </h1>
-      <div className="mt-6">
+      <p className="mt-4 max-w-2xl font-serif text-[1.0625rem] leading-relaxed text-paper-600">
+        Поддерживаются файлы CSV и XLSX до 100 МБ. Кодировка и разделитель
+        определяются автоматически. Анализ выполняется в фоне — вы получите
+        профайл, флаги качества, рекомендацию типа задачи и базовую модель.
+      </p>
+      <div className="mt-8">
         <Link
           to="/upload"
-          className="inline-flex items-center border border-ink-700 bg-ink-700 px-5 py-2.5 font-sans text-xs font-medium uppercase tracking-wider text-paper-50 transition-colors hover:bg-ink-800"
+          className="inline-flex items-center border border-ink-700 bg-ink-700 px-6 py-3 font-sans text-xs font-medium uppercase tracking-wider text-paper-50 transition-colors hover:bg-ink-800"
         >
-          ЗАГРУЗИТЬ ДАТАСЕТ
+          ЗАГРУЗИТЬ ПЕРВЫЙ ДАТАСЕТ
         </Link>
       </div>
     </div>
   );
+}
+
+function DashboardView({
+  isLoading,
+  datasetsCount,
+  analysesTotal,
+  latestAnalysis,
+}: {
+  isLoading: boolean;
+  datasetsCount: number | null;
+  analysesTotal: number | null;
+  latestAnalysis: {
+    id: string;
+    dataset_name: string;
+    started_at: string;
+    recommended_task_type: string | null;
+    status: string;
+  } | null;
+}) {
+  return (
+    <div>
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        АНАЛИЗАТОР · ПАНЕЛЬ
+      </p>
+      <h1 className="mt-3 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
+        Рабочий стол
+      </h1>
+
+      <div className="mt-8">
+        <Link
+          to="/upload"
+          className="inline-flex items-center border border-ink-700 bg-ink-700 px-6 py-3 font-sans text-xs font-medium uppercase tracking-wider text-paper-50 transition-colors hover:bg-ink-800"
+        >
+          ЗАГРУЗИТЬ ДАТАСЕТ
+        </Link>
+      </div>
+
+      <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        <LatestAnalysisCard
+          analysis={latestAnalysis}
+          loading={isLoading}
+        />
+        <CounterCard
+          label="Мои датасеты"
+          count={datasetsCount}
+          loading={isLoading}
+          to="/upload"
+          actionLabel="ПЕРЕЙТИ →"
+          unitWord="датасет"
+          unitWordPlural="датасета"
+          unitWordPluralMany="датасетов"
+        />
+        <CounterCard
+          label="История анализов"
+          count={analysesTotal}
+          loading={isLoading}
+          to="/history"
+          actionLabel="ОТКРЫТЬ →"
+          unitWord="анализ"
+          unitWordPlural="анализа"
+          unitWordPluralMany="анализов"
+        />
+      </div>
+    </div>
+  );
+}
+
+function LatestAnalysisCard({
+  analysis,
+  loading,
+}: {
+  analysis: {
+    id: string;
+    dataset_name: string;
+    started_at: string;
+    recommended_task_type: string | null;
+    status: string;
+  } | null;
+  loading: boolean;
+}) {
+  if (loading) {
+    return <CardSkeleton label="Последний анализ" />;
+  }
+  if (!analysis) {
+    // Сюда попадаем, если анализов нет, но есть датасеты — показываем
+    // подсказку «запустите первый», вместо пустой плашки.
+    return (
+      <div className="border border-paper-300 bg-paper-50 p-6">
+        <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+          ПОСЛЕДНИЙ АНАЛИЗ
+        </p>
+        <p className="mt-3 font-serif text-[0.9375rem] leading-relaxed text-paper-600">
+          Анализов пока нет. Откройте датасет и запустите первый — это
+          занимает несколько секунд.
+        </p>
+        <Link
+          to="/upload"
+          className="mt-4 inline-block border-b border-ink-700 pb-0.5 font-sans text-xs font-medium uppercase tracking-wider text-ink-700"
+        >
+          К ДАТАСЕТАМ →
+        </Link>
+      </div>
+    );
+  }
+
+  const startedAt = new Date(analysis.started_at).toLocaleString("ru-RU");
+  const taskLabel = analysis.recommended_task_type
+    ? TASK_TYPE_LABEL[analysis.recommended_task_type as TaskTypeCode] ??
+      analysis.recommended_task_type
+    : null;
+
+  return (
+    <Link
+      to={`/analyses/${analysis.id}`}
+      className="group border border-paper-300 bg-paper-50 p-6 transition-colors hover:border-ink-700"
+    >
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        ПОСЛЕДНИЙ АНАЛИЗ
+      </p>
+      <h2 className="mt-2 font-serif text-[1.375rem] font-semibold leading-snug tracking-tight text-paper-900 group-hover:text-ink-900">
+        {analysis.dataset_name}
+      </h2>
+      <dl className="mt-4 space-y-1 font-sans text-xs">
+        <DashRow label="Запущен" value={startedAt} mono />
+        <DashRow label="Статус" value={analysis.status.toUpperCase()} mono />
+        {taskLabel && <DashRow label="Тип задачи" value={taskLabel} />}
+      </dl>
+      <span className="mt-4 inline-block border-b border-transparent font-sans text-xs font-medium uppercase tracking-wider text-ink-700 group-hover:border-ink-700">
+        ОТКРЫТЬ АНАЛИЗ →
+      </span>
+    </Link>
+  );
+}
+
+function CounterCard({
+  label,
+  count,
+  loading,
+  to,
+  actionLabel,
+  unitWord,
+  unitWordPlural,
+  unitWordPluralMany,
+}: {
+  label: string;
+  count: number | null;
+  loading: boolean;
+  to: string;
+  actionLabel: string;
+  unitWord: string;
+  unitWordPlural: string;
+  unitWordPluralMany: string;
+}) {
+  if (loading || count === null) {
+    return <CardSkeleton label={label} />;
+  }
+  const word = pluralizeRu(count, unitWord, unitWordPlural, unitWordPluralMany);
+  return (
+    <Link
+      to={to}
+      className="group border border-paper-300 bg-paper-50 p-6 transition-colors hover:border-ink-700"
+    >
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        {label.toUpperCase()}
+      </p>
+      <p className="mt-2 font-serif text-[3rem] font-bold leading-none tracking-tight text-paper-900">
+        {formatNumber(count)}
+      </p>
+      <p className="mt-2 font-sans text-sm text-paper-600">{word}</p>
+      <span className="mt-4 inline-block border-b border-transparent font-sans text-xs font-medium uppercase tracking-wider text-ink-700 group-hover:border-ink-700">
+        {actionLabel}
+      </span>
+    </Link>
+  );
+}
+
+function CardSkeleton({ label }: { label: string }) {
+  return (
+    <div className="border border-paper-300 bg-paper-50 p-6">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        {label.toUpperCase()}
+      </p>
+      <div className="mt-3 h-8 w-24 animate-pulse bg-paper-200" />
+      <div className="mt-3 h-3 w-32 animate-pulse bg-paper-200" />
+    </div>
+  );
+}
+
+function DashRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <dt className="text-[0.6875rem] uppercase tracking-wider text-paper-500">
+        {label}
+      </dt>
+      <dd className={`text-paper-700 ${mono ? "font-mono" : "font-sans"}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+// Простая русская плюрализация: 1 анализ / 2 анализа / 5 анализов.
+// Локально, без i18n-библиотеки — используется только здесь.
+function pluralizeRu(
+  n: number,
+  one: string,
+  few: string,
+  many: string,
+): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${formatNumber(n)} ${one}`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14))
+    return `${formatNumber(n)} ${few}`;
+  return `${formatNumber(n)} ${many}`;
 }
 
 function GuestLanding() {
