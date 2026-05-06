@@ -42,7 +42,10 @@ const PLOT_LAYOUT_BASE = {
   },
 };
 
-const COLOR_NUMERIC = "#1F2A44"; // ink.700
+// info.500 (#4A5780) — приглушённый сине-чернильный, мягче для гистограмм на
+// кремовом фоне, чем плотный ink.700 (резало глаз в Phase 2). Категориальный
+// и target оставляем как есть — они уже спокойно читаются.
+const COLOR_NUMERIC = "#4A5780"; // info.500
 const COLOR_CATEGORICAL = "#5A7A55"; // success.500
 const COLOR_TARGET = "#A53A2A"; // critical.500
 
