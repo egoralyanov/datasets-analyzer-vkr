@@ -11,6 +11,7 @@ target_value_counts / target_kind / прочее).
 """
 from __future__ import annotations
 
+import secrets
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -148,6 +149,7 @@ def report_chain(
             original_filename="iris.csv",
             storage_path=f"/data/datasets/{user.id}/iris.csv",
             file_size_bytes=4_096,
+            file_hash=secrets.token_hex(32),
             format="csv",
             n_rows=150,
             n_cols=5,

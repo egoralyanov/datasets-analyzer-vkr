@@ -9,6 +9,7 @@ Unit-тесты ORM-модели Report.
 """
 from __future__ import annotations
 
+import secrets
 from collections.abc import Callable
 from typing import Any
 
@@ -30,6 +31,9 @@ def _make_dataset(db: Session, user: User) -> Dataset:
         original_filename="titanic.csv",
         storage_path=f"/data/datasets/{user.id}/test.csv",
         file_size_bytes=1024,
+        # file_hash — уникальный per-test, чтобы не ловить (user_id, file_hash)
+        # UNIQUE-конфликт на параллельных вызовах _make_dataset (Phase 4.1).
+        file_hash=secrets.token_hex(32),
         format="csv",
     )
     db.add(dataset)

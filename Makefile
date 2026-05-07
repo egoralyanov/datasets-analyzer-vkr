@@ -1,7 +1,7 @@
 # Makefile для проекта «Анализатор»
 # Все команды разработки идут через docker compose v2.
 
-.PHONY: up down logs migrate migrate-create seed seed-rules seed-catalog seed-all build-real-set build-synthetic-set train-meta test clean
+.PHONY: up down logs migrate migrate-create seed seed-rules seed-catalog seed-all build-real-set build-synthetic-set train-meta test test-migrations clean
 
 # Поднять все контейнеры (postgres, backend, frontend) в фоне
 up:
@@ -72,6 +72,12 @@ seed-all: seed-rules
 # Запустить unit-тесты бэкенда внутри контейнера
 test:
 	docker compose exec backend pytest
+
+# Запуск тестов на миграции (помечены маркером `migration` и пропускаются
+# в обычном `make test`). Выполняют downgrade/upgrade alembic, поэтому
+# изолированы от основного suite. По завершении схема возвращается в head.
+test-migrations:
+	docker compose exec backend pytest -m migration
 
 # Полная очистка: остановить контейнеры и удалить volumes (БД будет очищена)
 clean:

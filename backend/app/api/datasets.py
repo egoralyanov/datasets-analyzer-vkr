@@ -20,7 +20,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.config import settings
-from app.file_storage import delete_dataset_file, save_uploaded_file
+from app.file_storage import (
+    compute_file_sha256,
+    delete_dataset_file,
+    save_uploaded_file,
+)
 from app.models.user import User
 from app.repositories import dataset_repo
 from app.schemas.dataset import DatasetPreview, DatasetResponse, DatasetWithPreview
@@ -78,6 +82,26 @@ async def upload_dataset(
             detail=f"Файл превышает лимит {settings.MAX_FILE_SIZE_MB} МБ",
         )
 
+    # Дедупликация по SHA-256 (Спринт 6, Phase 4.1). Хэш считаем стримингом
+    # из файла на диске, а не от UploadFile.file: после save_uploaded_file
+    # cursor уже в конце потока, плюс читать с диска корректно для
+    # больших файлов. Существующие (user_id, file_hash) пары — UNIQUE INDEX
+    # ix_datasets_user_file_hash_unique; явная проверка даёт 409 с понятным
+    # detail вместо IntegrityError.
+    file_hash = compute_file_sha256(storage_path)
+    existing = dataset_repo.find_by_user_and_hash(
+        db, current_user.id, file_hash
+    )
+    if existing is not None:
+        delete_dataset_file(storage_path)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "detail": "Dataset with identical content already exists",
+                "existing_dataset_id": str(existing.id),
+            },
+        )
+
     try:
         preview = read_dataset_preview(Path(storage_path), ext)
     except Exception as e:
@@ -93,6 +117,7 @@ async def upload_dataset(
         original_filename=file.filename or f"unnamed.{ext}",
         storage_path=storage_path,
         file_size_bytes=size,
+        file_hash=file_hash,
         fmt=ext,
         n_rows=preview["n_rows"],
         n_cols=preview["n_cols"],

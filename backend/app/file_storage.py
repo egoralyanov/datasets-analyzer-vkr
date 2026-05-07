@@ -1,4 +1,5 @@
 """Работа с локальным файловым хранилищем датасетов."""
+import hashlib
 import shutil
 import uuid
 from pathlib import Path
@@ -6,6 +7,35 @@ from pathlib import Path
 from fastapi import UploadFile
 
 from app.config import settings
+
+
+# Размер буфера при стриминге файла для подсчёта SHA-256. 1 МБ — компромисс
+# между числом read-сисколлов и пиковым потреблением памяти. Для типового
+# CSV/XLSX порядка 10-50 МБ это 10-50 итераций.
+_HASH_CHUNK_BYTES = 1024 * 1024
+
+
+def compute_file_sha256(path: Path | str) -> str:
+    """
+    Считает SHA-256 содержимого файла, читая его чанками по 1 МБ.
+
+    Используется при загрузке датасета (Спринт 6, Phase 4.1) для
+    дедупликации: хэш сравнивается с существующими записями
+    `datasets.file_hash` в рамках того же пользователя. Файл не
+    загружается в память целиком — это важно для крупных Excel-файлов
+    (до 100 МБ по лимиту MAX_FILE_SIZE_MB).
+
+    Args:
+        path: путь к файлу.
+
+    Returns:
+        hex-строка длиной 64 символа.
+    """
+    sha = hashlib.sha256()
+    with Path(path).open("rb") as fh:
+        for chunk in iter(lambda: fh.read(_HASH_CHUNK_BYTES), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
 
 
 def _user_dir(user_id: uuid.UUID) -> Path:

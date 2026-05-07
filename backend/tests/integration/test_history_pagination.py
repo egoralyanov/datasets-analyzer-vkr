@@ -11,6 +11,7 @@ GET /api/analyses).
 """
 from __future__ import annotations
 
+import secrets
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -42,6 +43,7 @@ def _seed_analyses(
         original_filename=dataset_name,
         storage_path=f"/data/datasets/{user_id}/{dataset_name}",
         file_size_bytes=2048,
+        file_hash=secrets.token_hex(32),
         format="csv",
         n_rows=150,
         n_cols=5,

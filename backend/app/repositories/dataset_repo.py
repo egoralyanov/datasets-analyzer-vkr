@@ -14,6 +14,7 @@ def create_dataset(
     original_filename: str,
     storage_path: str,
     file_size_bytes: int,
+    file_hash: str,
     fmt: str,
     n_rows: int | None,
     n_cols: int | None,
@@ -23,6 +24,7 @@ def create_dataset(
         original_filename=original_filename,
         storage_path=storage_path,
         file_size_bytes=file_size_bytes,
+        file_hash=file_hash,
         format=fmt,
         n_rows=n_rows,
         n_cols=n_cols,
@@ -41,6 +43,24 @@ def get_dataset(
         select(Dataset).where(
             Dataset.id == dataset_id,
             Dataset.user_id == user_id,
+        )
+    )
+
+
+def find_by_user_and_hash(
+    db: Session, user_id: uuid.UUID, file_hash: str
+) -> Dataset | None:
+    """
+    Ищет существующий датасет того же пользователя с указанным SHA-256.
+
+    Используется при загрузке (Спринт 6, Phase 4.1) для дедупликации:
+    при попытке загрузить файл с тем же содержимым возвращается 409 со
+    ссылкой на существующий dataset_id, новая запись не создаётся.
+    """
+    return db.scalar(
+        select(Dataset).where(
+            Dataset.user_id == user_id,
+            Dataset.file_hash == file_hash,
         )
     )
 
