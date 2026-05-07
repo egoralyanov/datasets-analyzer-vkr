@@ -234,8 +234,13 @@ function SectionHeading({
   allHref: string;
   allLabel: string;
 }) {
+  // min-h-20 фиксирует высоту шапки до hairline (≥ 80px). Этого хватит на
+  // случай, когда title переносится на 2 строки (33px × 2 + pb-2 = 74px) —
+  // именно так ведёт себя «Последние датасеты» в правой колонке узкой 1fr,
+  // пока «Последние анализы» слева умещается в одну строку. Без min-h
+  // hairline-границы оказались бы на разной высоте.
   return (
-    <header className="mb-4 flex items-baseline justify-between gap-4 border-b border-paper-300 pb-2">
+    <header className="mb-4 flex min-h-20 items-baseline justify-between gap-4 border-b border-paper-300 pb-2">
       <h2 className="font-serif text-[1.5rem] font-semibold leading-snug tracking-tight text-paper-900">
         {title}
       </h2>
