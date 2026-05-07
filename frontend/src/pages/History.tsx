@@ -22,6 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Trash2 } from "lucide-react";
 import { analysesApi } from "../api/analyses";
 import { DeleteAnalysisModal } from "../components/analysis/DeleteAnalysisModal";
+import { computeDuration } from "../lib/duration";
 import type {
   AnalysisListItem,
   AnalysisListResponse,
@@ -356,17 +357,3 @@ function formatDateTime(iso: string): string {
   return dateFormatter.format(d);
 }
 
-function computeDuration(
-  startedIso: string,
-  finishedIso: string | null,
-): string | null {
-  if (!finishedIso) return null;
-  const startMs = Date.parse(startedIso);
-  const endMs = Date.parse(finishedIso);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
-  const seconds = Math.max(0, Math.round((endMs - startMs) / 1000));
-  if (seconds < 60) return `${seconds} сек`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return rest === 0 ? `${minutes} мин` : `${minutes} мин ${rest} сек`;
-}
