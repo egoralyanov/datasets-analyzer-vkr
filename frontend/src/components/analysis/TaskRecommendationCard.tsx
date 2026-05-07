@@ -7,12 +7,11 @@
 // открытую структуру), expandable «Вероятности классов (ML)» — нижний
 // уровень детализации, по умолчанию свёрнут.
 //
-// Sprint 6, Phase 3: внутри expandable-секции вероятностей ML — перед
-// самой таблицей вероятностей — добавлено короткое пояснение о том, как
-// работает Слой 2 (по каким признакам и что именно сравнивается с
-// эталонами). Показывается только при source ∈ {hybrid, ml}, потому что
-// при чистых правилах Слой 2 не вызывается. См. .knowledge/methods/
-// recommender-ml.md.
+// Sprint 6, Phase 3: между «Применённые правила» и кнопкой «Показать
+// вероятности ML» добавлено always-visible пояснение о том, как работает
+// Слой 2 (по каким признакам и что именно сравнивается с эталонами).
+// Показывается только при source ∈ {hybrid, ml}, потому что при чистых
+// правилах Слой 2 не вызывается. См. .knowledge/methods/recommender-ml.md.
 //
 // См. frontend/DESIGN_TOKENS.md, разделы 7 и 8.4.
 import { useState } from "react";
@@ -142,9 +141,18 @@ export function TaskRecommendationCard({ recommendation }: Props) {
         </div>
       )}
 
-      {/* ML-вероятности — глубокий уровень детализации, expand-able.
-          Внутри (только при hybrid/ml source) — пояснение про Слой 2
-          перед таблицей вероятностей. */}
+      {/* Описание работы Слоя 2 — always-visible, только при hybrid/ml. */}
+      {(recommendation.source === "hybrid" ||
+        recommendation.source === "ml") && (
+        <p className="mt-6 max-w-3xl border-l-2 border-ink-300 bg-paper-100/60 px-4 py-3 font-sans text-sm leading-relaxed text-paper-700">
+          Модель Слоя 2 оценивает датасет по 16 мета-признакам — типу целевой
+          переменной, кардинальности, балансу классов, корреляциям,
+          размерности. Решение основано на близости к похожим эталонам из
+          обучающей выборки.
+        </p>
+      )}
+
+      {/* ML-вероятности — глубокий уровень детализации, expand-able. */}
       {recommendation.ml_probabilities && (
         <div className="mt-6 max-w-3xl">
           <button
@@ -158,37 +166,26 @@ export function TaskRecommendationCard({ recommendation }: Props) {
               : "ПОКАЗАТЬ ВЕРОЯТНОСТИ ML →"}
           </button>
           {mlExpanded && (
-            <>
-              {(recommendation.source === "hybrid" ||
-                recommendation.source === "ml") && (
-                <p className="mt-3 border-l-2 border-ink-300 bg-paper-100/60 px-4 py-3 font-sans text-sm leading-relaxed text-paper-700">
-                  Модель Слоя 2 оценивает датасет по 16 мета-признакам — типу
-                  целевой переменной, кардинальности, балансу классов,
-                  корреляциям, размерности. Решение основано на близости к
-                  похожим эталонам из обучающей выборки.
-                </p>
-              )}
-              <ul className="mt-3 divide-y divide-paper-200 border-y border-paper-200">
-                {Object.entries(recommendation.ml_probabilities)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([cls, prob]) => (
-                    <li
-                      key={cls}
-                      className="grid grid-cols-[1fr_auto] items-center gap-4 px-1 py-2"
-                    >
-                      <span className="font-sans text-sm text-paper-700">
-                        {TASK_TYPE_LABEL[cls as TaskTypeCode] ?? cls}
+            <ul className="mt-3 divide-y divide-paper-200 border-y border-paper-200">
+              {Object.entries(recommendation.ml_probabilities)
+                .sort((a, b) => b[1] - a[1])
+                .map(([cls, prob]) => (
+                  <li
+                    key={cls}
+                    className="grid grid-cols-[1fr_auto] items-center gap-4 px-1 py-2"
+                  >
+                    <span className="font-sans text-sm text-paper-700">
+                      {TASK_TYPE_LABEL[cls as TaskTypeCode] ?? cls}
+                    </span>
+                    <span className="font-mono text-xs text-paper-800">
+                      {prob.toFixed(3)}{" "}
+                      <span className="text-paper-500">
+                        ({Math.round(prob * 100)}%)
                       </span>
-                      <span className="font-mono text-xs text-paper-800">
-                        {prob.toFixed(3)}{" "}
-                        <span className="text-paper-500">
-                          ({Math.round(prob * 100)}%)
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            </>
+                    </span>
+                  </li>
+                ))}
+            </ul>
           )}
         </div>
       )}

@@ -7,12 +7,21 @@
 // (`lg:grid-cols-[3fr_2fr]`), на узких — стек.
 //
 // Sprint 6, Phase 3: после таблицы метрик показывается ruled-блок с
-// семантическим вердиктом (success / warning / critical). Берём ЛУЧШУЮ
-// модель (для регрессии — по r2, для классификации — по f1_macro/f1) и
-// классифицируем её качество порогами:
-//   r2:        ≥0.7 success | ≥0.3 success | ≥0 warning | <0 critical
-//   accuracy:  ≥0.9 success | ≥0.7 success | ≥(1/N + 0.1) warning |
-//              около 1/N — critical
+// семантическим вердиктом (4 категории: success / info / warning /
+// critical). Берём ЛУЧШУЮ модель (для регрессии — по r2, для
+// классификации — по f1_macro/f1) и классифицируем её качество порогами:
+//   r2:        ≥0.7 success | ≥0.3 info | ≥0 warning | <0 critical
+//   accuracy:  ≥0.9 success | ≥0.7 info | ≥(1/N + 0.1) warning |
+//              ≈1/N (|acc-base|<0.05) critical
+// Лейблы: УВЕРЕННЫЙ СИГНАЛ / УМЕРЕННЫЙ / СЛАБЫЙ / НЕТ СИГНАЛА.
+//
+// Дополнительно: если для классификации две модели близки по f1_macro
+// (|Δ|<0.02), но сильно расходятся по accuracy (вторая выше на >0.15) —
+// это типичная картина при дисбалансе классов (модель угадывает
+// доминирующий класс). Тон вердикта override → warning, к тексту
+// добавляется уточнение про вторую модель и отсылка к разделу
+// «Качество данных».
+//
 // Это локальная фронт-логика, без изменения backend-контракта.
 //
 // См. frontend/DESIGN_TOKENS.md, раздел 8.4.
@@ -332,7 +341,7 @@ function DoneView({
 //                    Семантический вердикт по результатам baseline
 // =============================================================================
 
-type VerdictTone = "success" | "warning" | "critical";
+type VerdictTone = "success" | "info" | "warning" | "critical";
 
 type Verdict = {
   tone: VerdictTone;
@@ -344,13 +353,15 @@ type Verdict = {
 // DESIGN_TOKENS.md, п.7).
 const VERDICT_STYLES: Record<VerdictTone, string> = {
   success: "border-success-500 bg-success-50/40 text-success-700",
+  info: "border-info-500 bg-info-50/40 text-info-700",
   warning: "border-warning-500 bg-warning-50/40 text-warning-700",
   critical: "border-critical-500 bg-critical-50/40 text-critical-700",
 };
 
 const VERDICT_LABEL: Record<VerdictTone, string> = {
-  success: "ВЕРДИКТ · ХОРОШО",
-  warning: "ВЕРДИКТ · СЛАБО",
+  success: "ВЕРДИКТ · УВЕРЕННЫЙ СИГНАЛ",
+  info: "ВЕРДИКТ · УМЕРЕННЫЙ",
+  warning: "ВЕРДИКТ · СЛАБЫЙ",
   critical: "ВЕРДИКТ · НЕТ СИГНАЛА",
 };
 
@@ -406,10 +417,69 @@ function computeVerdict(
     if (accuracy === undefined || !Number.isFinite(accuracy)) return null;
     const effectiveClasses =
       taskType === "BINARY_CLASSIFICATION" ? 2 : nClasses ?? 0;
-    return classificationVerdict(accuracy, effectiveClasses);
+
+    const baseVerdict = classificationVerdict(accuracy, effectiveClasses);
+
+    // Override: близкие f1, но сильно расходящийся accuracy → дисбаланс
+    // классов; тон → warning, к тексту добавляем фразу про вторую модель.
+    const divergence = detectF1AccuracyDivergence(
+      result,
+      rankerKey,
+      bestModel,
+      accuracy,
+    );
+    if (divergence !== null) {
+      return {
+        tone: "warning",
+        text: `${baseVerdict.text} ${divergence}`,
+      };
+    }
+    return baseVerdict;
   }
 
   return null;
+}
+
+// Поиск второй модели, у которой f1 близок к лучшему (|Δ|<0.02), но
+// accuracy выше более чем на 0.15. Возвращает уточняющую фразу для
+// вердикта или null, если такой модели нет.
+function detectF1AccuracyDivergence(
+  result: BaselineResult,
+  rankerKey: string,
+  bestModel: string,
+  bestAccuracy: number,
+): string | null {
+  const bestF1 = result.metrics[bestModel]?.[rankerKey]?.mean;
+  if (bestF1 === undefined || !Number.isFinite(bestF1)) return null;
+
+  let candidate: { model: string; accuracy: number } | null = null;
+  for (const model of result.models) {
+    if (model === bestModel) continue;
+    const f1 = result.metrics[model]?.[rankerKey]?.mean;
+    const acc = result.metrics[model]?.accuracy?.mean;
+    if (f1 === undefined || acc === undefined) continue;
+    if (!Number.isFinite(f1) || !Number.isFinite(acc)) continue;
+
+    const f1Close = Math.abs(bestF1 - f1) < 0.02;
+    const accMuchHigher = acc - bestAccuracy > 0.15;
+    if (f1Close && accMuchHigher) {
+      if (candidate === null || acc > candidate.accuracy) {
+        candidate = { model, accuracy: acc };
+      }
+    }
+  }
+
+  if (candidate === null) return null;
+
+  const modelLabel = MODEL_LABELS[candidate.model] ?? candidate.model;
+  const f1Label = rankerKey === "f1_macro" ? "f1_macro" : "f1";
+  return (
+    `Однако ${modelLabel} даёт более высокий accuracy ` +
+    `(${candidate.accuracy.toFixed(3)}), при близком ${f1Label}. ` +
+    "Это типичная картина при дисбалансе классов: модель угадывает " +
+    "доминирующий класс, но плохо предсказывает малочисленные. Перед " +
+    "выбором модели изучите предупреждения в разделе «Качество данных»."
+  );
 }
 
 // Среди всех моделей берём максимальное среднее по указанной метрике.
@@ -457,7 +527,7 @@ function regressionVerdict(r2: number): Verdict {
   }
   if (r2 >= 0.3) {
     return {
-      tone: "success",
+      tone: "info",
       text:
         "Модель находит умеренный сигнал. Возможна доработка признаков для улучшения качества.",
     };
@@ -485,7 +555,7 @@ function classificationVerdict(accuracy: number, nClasses: number): Verdict {
   }
   if (accuracy >= 0.7) {
     return {
-      tone: "success",
+      tone: "info",
       text:
         "Модель различает классы, но есть пространство для улучшения.",
     };
@@ -509,11 +579,13 @@ function classificationVerdict(accuracy: number, nClasses: number): Verdict {
         "Модель обходит случайный выбор, но слабо. Для надёжного прогноза требуется доработка.",
     };
   }
-  // Между «около base» и «base+0.1» — тоже warning, но с акцентом на разницу.
+  // Между «около base» и «base+0.1» — тоже слабое отличие от случайного,
+  // тон сохраняем warning (но не critical, чтобы оставить разрядку в
+  // лейбле для случая acc ≈ baseline).
   return {
     tone: "warning",
     text:
-      "Модель обходит случайный выбор, но слабо. Для надёжного прогноза требуется доработка.",
+      "Модель лишь немного обходит случайный выбор. Для надёжного прогноза требуется доработка.",
   };
 }
 
