@@ -227,9 +227,10 @@ def test_upload_duplicate_returns_409(
     )
     assert second.status_code == 409
     body = second.json()
-    # FastAPI оборачивает HTTPException(detail=...) в {"detail": ...}.
-    assert body["detail"]["existing_dataset_id"] == first_id
-    assert "already exists" in body["detail"]["detail"].lower()
+    # Плоский формат: detail — строка, existing_dataset_id — строка UUID.
+    assert isinstance(body["detail"], str)
+    assert "already exists" in body["detail"].lower()
+    assert body["existing_dataset_id"] == first_id
 
     # В БД ровно одна запись для этого юзера.
     with SessionLocal() as db:

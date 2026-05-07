@@ -16,6 +16,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -57,7 +58,10 @@ async def upload_dataset(
     content_length: int | None = Header(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> DatasetWithPreview:
+):
+    # Возвращаемый тип — DatasetWithPreview на 201, либо JSONResponse на 409
+    # (плоское тело {"detail": "...", "existing_dataset_id": "..."}).
+    # Поэтому без явной аннотации возврата.
     ext = _get_extension(file.filename)
     if ext not in _ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -86,17 +90,19 @@ async def upload_dataset(
     # из файла на диске, а не от UploadFile.file: после save_uploaded_file
     # cursor уже в конце потока, плюс читать с диска корректно для
     # больших файлов. Существующие (user_id, file_hash) пары — UNIQUE INDEX
-    # ix_datasets_user_file_hash_unique; явная проверка даёт 409 с понятным
-    # detail вместо IntegrityError.
+    # ix_datasets_user_file_hash_unique; явная проверка даёт 409 с плоским
+    # телом {"detail": "...", "existing_dataset_id": "..."} (через
+    # JSONResponse напрямую — HTTPException(detail=dict) обернул бы dict
+    # в дополнительный {"detail": ...}).
     file_hash = compute_file_sha256(storage_path)
     existing = dataset_repo.find_by_user_and_hash(
         db, current_user.id, file_hash
     )
     if existing is not None:
         delete_dataset_file(storage_path)
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            detail={
+            content={
                 "detail": "Dataset with identical content already exists",
                 "existing_dataset_id": str(existing.id),
             },
