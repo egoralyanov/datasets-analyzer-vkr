@@ -28,7 +28,12 @@ from app.file_storage import (
 )
 from app.models.user import User
 from app.repositories import dataset_repo
-from app.schemas.dataset import DatasetPreview, DatasetResponse, DatasetWithPreview
+from app.schemas.dataset import (
+    DatasetPreview,
+    DatasetResponse,
+    DatasetUsageResponse,
+    DatasetWithPreview,
+)
 from app.services.dataset_service import read_dataset_preview
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -174,6 +179,40 @@ def get_dataset_with_preview(
             rows=preview["rows"],
             dtypes=preview["dtypes"],
         ),
+    )
+
+
+@router.get("/{dataset_id}/usage", response_model=DatasetUsageResponse)
+def get_dataset_usage(
+    dataset_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DatasetUsageResponse:
+    """
+    Сводка артефактов датасета: число анализов и успешно сгенерированных
+    PDF-отчётов. Фронт использует это перед confirm-диалогом удаления, чтобы
+    показать «также удалит N анализов и M отчётов» (Спринт 6, Phase 4.2).
+
+    Доступ: владелец датасета ИЛИ admin. Любой другой пользователь и
+    несуществующий dataset_id → 404 (без различения, чтобы не палить
+    существование чужого датасета).
+    """
+    if current_user.role == "admin":
+        dataset = dataset_repo.get_dataset_any(db, dataset_id)
+    else:
+        dataset = dataset_repo.get_dataset(db, dataset_id, current_user.id)
+    if dataset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Датасет не найден"
+        )
+
+    analyses_count = dataset_repo.count_analyses_for_dataset(db, dataset_id)
+    reports_count = dataset_repo.count_successful_reports_for_dataset(
+        db, dataset_id
+    )
+    return DatasetUsageResponse(
+        analyses_count=analyses_count,
+        reports_count=reports_count,
     )
 
 

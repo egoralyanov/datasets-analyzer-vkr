@@ -1,10 +1,12 @@
 """CRUD-операции над таблицей datasets."""
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.analysis import Analysis
 from app.models.dataset import Dataset
+from app.models.report import Report
 
 
 def create_dataset(
@@ -63,6 +65,50 @@ def find_by_user_and_hash(
             Dataset.file_hash == file_hash,
         )
     )
+
+
+def get_dataset_any(db: Session, dataset_id: uuid.UUID) -> Dataset | None:
+    """
+    Возвращает датасет по ID без фильтра по пользователю.
+
+    Используется в эндпоинтах, где доступ имеет admin (Спринт 6, Phase 4.2):
+    `GET /api/datasets/{id}/usage` принимает запросы от владельца ИЛИ админа.
+    Для не-админских вызовов следует использовать `get_dataset(db, id, user_id)`,
+    который сразу скоупит по пользователю.
+    """
+    return db.get(Dataset, dataset_id)
+
+
+def count_analyses_for_dataset(db: Session, dataset_id: uuid.UUID) -> int:
+    """Число анализов датасета без фильтра по статусу (Спринт 6, Phase 4.2)."""
+    result = db.scalar(
+        select(func.count())
+        .select_from(Analysis)
+        .where(Analysis.dataset_id == dataset_id)
+    )
+    return int(result or 0)
+
+
+def count_successful_reports_for_dataset(
+    db: Session, dataset_id: uuid.UUID
+) -> int:
+    """
+    Число успешно сгенерированных PDF-отчётов по всем анализам датасета.
+
+    `status='success'` — только готовые артефакты (failed/pending для UI
+    бесполезны). JOIN с analyses, потому что Report.dataset_id напрямую
+    отсутствует — связь через analysis_id (см. модель Report).
+    """
+    result = db.scalar(
+        select(func.count())
+        .select_from(Report)
+        .join(Analysis, Report.analysis_id == Analysis.id)
+        .where(
+            Analysis.dataset_id == dataset_id,
+            Report.status == "success",
+        )
+    )
+    return int(result or 0)
 
 
 def list_datasets(db: Session, user_id: uuid.UUID) -> list[Dataset]:
