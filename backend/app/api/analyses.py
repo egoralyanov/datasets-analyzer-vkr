@@ -20,15 +20,18 @@ API-эндпоинты для запуска и получения анализ�
 """
 from __future__ import annotations
 
+import logging
 import uuid
 
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.db import SessionLocal
+from app.file_storage import delete_report_file
 from app.models.analysis_result import AnalysisResult
 from app.models.user import User
 from app.repositories import analysis_repo, dataset_repo
@@ -49,6 +52,8 @@ from app.schemas.baseline import (
 from app.services.analysis_service import run_analysis
 from app.services.baseline_orchestrator import run_baseline_async
 from app.services.dataset_matcher import find_similar_datasets
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["analyses"])
 
@@ -176,6 +181,89 @@ def get_analysis_status(
             status_code=status.HTTP_404_NOT_FOUND, detail="Анализ не найден"
         )
     return AnalysisResponse.model_validate(analysis)
+
+
+@router.delete("/analyses/{analysis_id}")
+def delete_analysis(
+    analysis_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Удаляет анализ со всеми артефактами (Спринт 6, Phase 4.3).
+
+    Доступ: владелец ИЛИ admin. Любой другой пользователь и несуществующий
+    analysis_id → 404 (не палим существование).
+
+    Гейты по running-задачам — 409 с плоским телом
+    `{"detail": "..."}` (через JSONResponse, не HTTPException, по образцу
+    Phase 4.1 followup):
+    - `analysis.status ∈ {pending, running}` → «profiling in progress»
+    - `analysis.result.baseline_status == 'running'` → «baseline training in progress»
+    Profiling-проверка идёт первой, потому что она раньше в lifecycle:
+    при одновременных условиях возвращается она.
+
+    Каскад: FK ondelete=CASCADE из моделей унесёт analysis_results,
+    quality_flags и reports автоматически. Файлы PDF success-отчётов
+    собираем ДО `db.delete(analysis)` (после cascade-удаления записей
+    путей бы уже не было), удаляем после `db.commit()`. Ошибка
+    физического удаления файла НЕ откатывает БД — она логируется как
+    WARNING, и записи в БД консистентны (orphan-файл — это не
+    catastrophic state).
+    """
+    if current_user.role == "admin":
+        analysis = analysis_repo.get_analysis_unscoped(db, analysis_id)
+    else:
+        analysis = analysis_repo.get_analysis(db, analysis_id, current_user.id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Анализ не найден"
+        )
+
+    # Profiling раньше в lifecycle — проверяется первым.
+    if analysis.status in ("pending", "running"):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": "Cannot delete analysis while profiling is in progress",
+            },
+        )
+
+    if (
+        analysis.result is not None
+        and analysis.result.baseline_status == "running"
+    ):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": "Cannot delete analysis while baseline training is in progress",
+            },
+        )
+
+    # Снимок относительных путей PDF — до cascade-удаления записей Report.
+    report_paths = analysis_repo.get_report_file_paths_for_analysis(
+        db, analysis_id
+    )
+
+    analysis_repo.delete_analysis(db, analysis)
+
+    # Файлы — после успешного коммита БД. Любой сбой здесь оставляет
+    # orphan-файлы, но не нарушает консистентность БД (записи Report
+    # уже удалены через cascade); логируем WARNING и идём дальше.
+    failed_unlinks: list[str] = []
+    for relative_path in report_paths:
+        try:
+            delete_report_file(relative_path)
+        except OSError:
+            failed_unlinks.append(relative_path)
+    if failed_unlinks:
+        logger.warning(
+            "Не удалось удалить orphan-PDF после удаления анализа %s: %s",
+            analysis_id,
+            failed_unlinks,
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

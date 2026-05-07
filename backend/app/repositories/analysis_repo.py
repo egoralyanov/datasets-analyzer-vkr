@@ -55,12 +55,48 @@ def get_analysis_unscoped(db: Session, analysis_id: uuid.UUID) -> Analysis | Non
     """
     Возвращает анализ без фильтра по пользователю.
 
-    Используется только из background-задачи (analysis_service.run_analysis):
-    запись была создана через API с проверкой прав, поэтому повторно
-    фильтровать по user_id не нужно. Для HTTP-эндпоинтов всегда используется
-    `get_analysis(..., user_id)`.
+    Используется из background-задачи (analysis_service.run_analysis): запись
+    была создана через API с проверкой прав, повторно фильтровать по user_id
+    не нужно. Также используется в HTTP-эндпоинтах с admin-доступом
+    (Спринт 6, Phase 4.3): `DELETE /api/analyses/{id}` принимает запрос от
+    владельца ИЛИ admin'а.
     """
     return db.get(Analysis, analysis_id)
+
+
+def get_report_file_paths_for_analysis(
+    db: Session, analysis_id: uuid.UUID
+) -> list[str]:
+    """
+    Возвращает относительные пути PDF-файлов всех success-отчётов анализа.
+
+    Используется в DELETE /api/analyses/{id} (Спринт 6, Phase 4.3): пути
+    нужно собрать ДО `db.delete(analysis)`, иначе FK ondelete=CASCADE
+    удалит записи Report и узнать пути будет негде. После коммита по
+    собранному списку чистим файлы с диска.
+
+    Фильтр `status='success' AND file_path IS NOT NULL` — у failed/pending
+    отчётов файла на диске нет (запись pending создаётся ДО рендера, и
+    file_path выставляется только при успешном завершении).
+    """
+    rows = db.execute(
+        select(Report.file_path).where(
+            Report.analysis_id == analysis_id,
+            Report.status == "success",
+            Report.file_path.is_not(None),
+        )
+    ).all()
+    return [row[0] for row in rows if row[0]]
+
+
+def delete_analysis(db: Session, analysis: Analysis) -> None:
+    """
+    Удаляет анализ; FK ondelete=CASCADE каскадно унесёт analysis_results,
+    quality_flags и reports (см. модели). Файлы на диске нужно удалить
+    отдельно (PDF success-отчётов) — это делает эндпоинт после коммита.
+    """
+    db.delete(analysis)
+    db.commit()
 
 
 def list_analyses(db: Session, user_id: uuid.UUID) -> list[Analysis]:

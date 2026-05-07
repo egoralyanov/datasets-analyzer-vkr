@@ -65,3 +65,16 @@ def save_uploaded_file(
 def delete_dataset_file(storage_path: str) -> None:
     """Удаляет файл с диска. Если файла уже нет — молча игнорируем."""
     Path(storage_path).unlink(missing_ok=True)
+
+
+def delete_report_file(relative_path: str) -> None:
+    """
+    Удаляет PDF-файл отчёта, разрешая путь относительно settings.REPORTS_DIR.
+
+    `Report.file_path` хранится в БД как относительный путь
+    `{user_id}/{report_id}.pdf` — абсолютный собирается через
+    `REPORTS_DIR / file_path`. Используется при удалении анализа
+    (Спринт 6, Phase 4.3) и пользователя (Phase 4.4) для зачистки orphan-PDF
+    после cascade-удаления записей.
+    """
+    Path(settings.REPORTS_DIR, relative_path).unlink(missing_ok=True)
