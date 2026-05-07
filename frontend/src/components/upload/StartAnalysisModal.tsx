@@ -1,10 +1,18 @@
 // Модалка запуска анализа.
 //
-// Стиль (Sprint 5, Phase 3.11): scientific/archive — overlay с paper-фоном
-// и единственной разрешённой `shadow-overlay` (см. DESIGN_TOKENS.md, раздел 5);
-// форма в hairline-обводке, инпуты архивные, кнопки в archive-стиле.
+// Стиль: scientific/archive — overlay с paper-фоном и единственной разрешённой
+// `shadow-overlay` (см. DESIGN_TOKENS.md, раздел 5); форма в hairline-обводке,
+// инпуты архивные, кнопки в archive-стиле.
+//
+// Реализация (Sprint 6, Phase 1): выделенный `ModalInner` монтируется только
+// при `open=true`. Это даёт «бесплатный» сброс формы при каждом открытии
+// (новая инстанция → `useState("")` стартует заново) — без useEffect-сброса
+// и без eslint-error `set-state-in-effect`. Esc-listener живёт внутри
+// `ModalInner`, потому что снаружи он бы ничего не делал.
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+
+type SubmitParams = { target_column: string | null };
 
 type Props = {
   open: boolean;
@@ -12,37 +20,32 @@ type Props = {
   isPending: boolean;
   errorText?: string | null;
   onClose: () => void;
-  onSubmit: (params: { target_column: string | null }) => void;
+  onSubmit: (params: SubmitParams) => void;
 };
 
-export function StartAnalysisModal({
-  open,
+export function StartAnalysisModal(props: Props) {
+  if (!props.open) return null;
+  return <ModalInner {...props} />;
+}
+
+type InnerProps = Omit<Props, "open">;
+
+function ModalInner({
   columns,
   isPending,
   errorText,
   onClose,
   onSubmit,
-}: Props) {
+}: InnerProps) {
   const [target, setTarget] = useState<string>("");
 
-  // Сброс формы при открытии модалки.
   useEffect(() => {
-    if (open) {
-      setTarget("");
-    }
-  }, [open]);
-
-  // Esc закрывает модалку.
-  useEffect(() => {
-    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isPending) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, isPending, onClose]);
-
-  if (!open) return null;
+  }, [isPending, onClose]);
 
   return (
     <div

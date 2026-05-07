@@ -46,9 +46,9 @@ export function Header() {
               <button
                 type="button"
                 onClick={onLogout}
-                className="border-b-2 border-transparent pb-0.5 text-paper-600 transition-colors hover:border-ink-700 hover:text-ink-700"
+                className="border-b-2 border-transparent pb-0.5 font-sans text-xs font-medium uppercase tracking-wider text-paper-600 transition-colors hover:border-ink-700 hover:text-ink-700"
               >
-                Выйти
+                ВЫЙТИ
               </button>
             </>
           ) : (

@@ -158,14 +158,25 @@ function SubsectionHeader({
 }
 
 function StatsGrid({ data }: { data: AdminStats }) {
+  // 4 stat-cards в первой строке + 2 rate-cards во второй (каждая span=2 на
+  // широких экранах). На узких — 2 колонки, всё ложится без пустых ячеек.
+  // Иначе grid-bg paper-300 просвечивал бы как пустой серый разделитель.
   return (
     <div className="grid grid-cols-2 gap-x-px gap-y-px border border-paper-300 bg-paper-300 lg:grid-cols-4">
       <StatCard label="Пользователи" value={data.total_users} />
       <StatCard label="Датасеты" value={data.total_datasets} />
       <StatCard label="Анализы" value={data.total_analyses} />
       <StatCard label="PDF-отчёты" value={data.total_reports} />
-      <RateCard label="Успешные анализы" rate={data.analyses_success_rate} />
-      <RateCard label="Успешные отчёты" rate={data.reports_success_rate} />
+      <RateCard
+        label="Успешные анализы"
+        rate={data.analyses_success_rate}
+        wide
+      />
+      <RateCard
+        label="Успешные отчёты"
+        rate={data.reports_success_rate}
+        wide
+      />
     </div>
   );
 }
@@ -186,9 +197,11 @@ function StatCard({ label, value }: { label: string; value: number }) {
 function RateCard({
   label,
   rate,
+  wide = false,
 }: {
   label: string;
   rate: number | null;
+  wide?: boolean;
 }) {
   const tone =
     rate === null
@@ -199,7 +212,9 @@ function RateCard({
           ? "text-warning-700"
           : "text-critical-700";
   return (
-    <div className="bg-paper-50 px-5 py-5">
+    <div
+      className={`bg-paper-50 px-5 py-5 ${wide ? "lg:col-span-2" : ""}`}
+    >
       <p className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
         {label.toUpperCase()}
       </p>

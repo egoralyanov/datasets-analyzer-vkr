@@ -2,7 +2,15 @@
 // hairline-разделителем снизу. Группировка по severity, expandable
 // definition-list с context'ом в Mono.
 //
-// См. frontend/DESIGN_TOKENS.md, раздел 8.2.
+// Стиль (Sprint 6, Phase 1): severity-бейджи теперь «пилюли» с тонкой
+// обводкой (без bg-fill) — CRIT/WARN/INFO/OK. Длинные context-значения
+// (например, value_counts с 30+ ключами) больше не переполняют ячейку:
+// для значений > 80 символов ряд переключается в block-mode с скролл-
+// окном `max-h-32 overflow-y-auto` (компактно для типичного случая,
+// читабельно для редкого).
+//
+// См. frontend/DESIGN_TOKENS.md, раздел 8.2 + принцип «границы вместо
+// заливок».
 import { useState } from "react";
 import type { QualityFlag, Severity } from "../../types/analysis";
 
@@ -24,10 +32,9 @@ const SEVERITY_BADGE: Record<Severity, string> = {
   info: "INFO",
 };
 
-// Цвет рульки слева и текста бейджа. Тинт фона строки даём только для
-// critical — в остальных случаях фон остаётся paper.50, чтобы текст не
-// «терялся» на цветном поле (см. п. 7 манифеста — semantic-цвета как
-// отметки, а не заливки).
+// Цвет рульки слева. Тинт фона строки даём только для critical, для
+// остальных фон остаётся paper.50, чтобы текст не «терялся» (см. п. 7
+// манифеста — semantic как отметки, не заливки).
 const SEVERITY_RULE: Record<Severity, string> = {
   critical: "border-critical-500",
   warning: "border-warning-500",
@@ -46,12 +53,23 @@ const SEVERITY_TINT: Record<Severity, string> = {
   info: "bg-paper-50",
 };
 
+// Тонкая обводка severity-пилюли (без bg-fill — DESIGN_TOKENS.md, п.7).
+const SEVERITY_PILL_BORDER: Record<Severity, string> = {
+  critical: "border-critical-500",
+  warning: "border-warning-500",
+  info: "border-info-500",
+};
+
+// Порог, за которым context-значение разворачивается в скролл-блок.
+const LONG_VALUE_THRESHOLD = 80;
+
 export function QualityFlags({ flags }: Props) {
   if (flags.length === 0) {
     return (
       <div className="border-l-[3px] border-success-500 bg-paper-50 px-5 py-4">
-        <p className="font-sans text-xs font-medium uppercase tracking-wider text-success-700">
-          ОК · ПРОБЛЕМ НЕ ОБНАРУЖЕНО
+        <SeverityPill tone="success">OK</SeverityPill>
+        <p className="mt-2 font-sans text-xs font-medium uppercase tracking-wider text-success-700">
+          ПРОБЛЕМ НЕ ОБНАРУЖЕНО
         </p>
         <p className="mt-1 font-serif text-[0.9375rem] text-paper-700">
           Ни одно из 12 правил качества не сработало. Датасет пригоден к
@@ -104,13 +122,8 @@ function FlagRow({ flag }: { flag: QualityFlag }) {
     <div
       className={`border-b border-paper-200 last:border-b-0 border-l-[3px] ${SEVERITY_RULE[sev]} ${SEVERITY_TINT[sev]} px-5 py-3`}
     >
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span
-          className={`font-mono text-xs font-medium ${SEVERITY_TEXT[sev]}`}
-          aria-label={`severity: ${sev}`}
-        >
-          {SEVERITY_BADGE[sev]}
-        </span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <SeverityPill tone={sev}>{SEVERITY_BADGE[sev]}</SeverityPill>
         <span className="font-mono text-xs text-paper-700">
           {flag.rule_code}
         </span>
@@ -134,23 +147,74 @@ function FlagRow({ flag }: { flag: QualityFlag }) {
       )}
 
       {expanded && hasContext && (
-        <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-1.5 border-t border-paper-200 pt-3 sm:grid-cols-2">
+        <dl className="mt-3 space-y-1.5 border-t border-paper-200 pt-3">
           {Object.entries(flag.context!).map(([key, value]) => (
-            <div
-              key={key}
-              className="flex justify-between gap-3 border-b border-dotted border-paper-200 pb-1 last:border-b-0"
-            >
-              <dt className="font-sans text-xs uppercase tracking-wider text-paper-500">
-                {key}
-              </dt>
-              <dd className="font-mono text-xs text-paper-800">
-                {formatContextValue(value)}
-              </dd>
-            </div>
+            <ContextEntry key={key} entryKey={key} value={value} />
           ))}
         </dl>
       )}
     </div>
+  );
+}
+
+// Одна пара ключ/значение в раскрытом context'е. Для коротких значений —
+// inline (key слева, value справа). Для длинных (≥ 80 символов, типично
+// сериализованный value_counts) — block-mode: key сверху, value снизу
+// в скролл-окне max-h-32, чтобы не растягивать строку и не ломать grid.
+function ContextEntry({
+  entryKey,
+  value,
+}: {
+  entryKey: string;
+  value: unknown;
+}) {
+  const formatted = formatContextValue(value);
+  const isLong = formatted.length > LONG_VALUE_THRESHOLD;
+
+  if (isLong) {
+    return (
+      <div className="border-b border-dotted border-paper-200 pb-1 last:border-b-0">
+        <dt className="font-sans text-xs uppercase tracking-wider text-paper-500">
+          {entryKey}
+        </dt>
+        <dd className="mt-1 max-h-32 overflow-y-auto break-all border border-paper-200 bg-paper-50 px-2 py-1 font-mono text-xs leading-relaxed text-paper-800">
+          {formatted}
+        </dd>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-b border-dotted border-paper-200 pb-1 last:border-b-0">
+      <dt className="font-sans text-xs uppercase tracking-wider text-paper-500">
+        {entryKey}
+      </dt>
+      <dd className="break-all font-mono text-xs text-paper-800">
+        {formatted}
+      </dd>
+    </div>
+  );
+}
+
+// Severity-пилюля с тонкой обводкой, без bg-fill. Используется и для
+// бейджей замечаний (CRIT/WARN/INFO), и для empty-state (OK).
+function SeverityPill({
+  tone,
+  children,
+}: {
+  tone: Severity | "success";
+  children: React.ReactNode;
+}) {
+  const cls =
+    tone === "success"
+      ? "border-success-500 text-success-700"
+      : `${SEVERITY_PILL_BORDER[tone]} ${SEVERITY_TEXT[tone]}`;
+  return (
+    <span
+      className={`inline-flex items-center border px-2 py-0.5 font-mono text-[0.6875rem] font-medium tracking-wider ${cls}`}
+    >
+      {children}
+    </span>
   );
 }
 
