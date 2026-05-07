@@ -4,7 +4,7 @@
 // metadata в Mono, кнопки в archive-стиле, список датасетов как нумерованный
 // каталог с hairline-руллями (по аналогии с SimilarDatasetsCard).
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { datasetsApi } from "../api/datasets";
@@ -25,6 +25,7 @@ export function Upload() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const previewRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [current, setCurrent] = useState<DatasetWithPreview | null>(null);
   const [uploadPercent, setUploadPercent] = useState(0);
@@ -98,6 +99,26 @@ export function Upload() {
       setToast({ kind: "error", text: "Не удалось загрузить датасет." });
     },
   });
+
+  // Sprint 6, Phase 7: dashboard передаёт ?open={id} при клике на строку
+  // последних датасетов. Один раз дёргаем openMutation на этот id и
+  // удаляем параметр из URL, чтобы повторный mount страницы не открывал
+  // тот же датасет ещё раз. mutate триггерится по mountу — listQuery
+  // ждать не обязательно, GET /datasets/{id} работает независимо.
+  const openIdFromUrl = searchParams.get("open");
+  useEffect(() => {
+    if (!openIdFromUrl) return;
+    if (current?.id === openIdFromUrl) return;
+    if (openMutation.isPending) return;
+    openMutation.mutate(openIdFromUrl);
+    const next = new URLSearchParams(searchParams);
+    next.delete("open");
+    setSearchParams(next, { replace: true });
+    // openMutation/searchParams/setSearchParams умышленно вне зависимостей:
+    // нужен strict «дёрнуть один раз на каждый новый ?open=» — id-зависимость
+    // достаточна, у openMutation внутри уже idempotency через current?.id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openIdFromUrl]);
 
   const onChooseAnotherFile = () => {
     setDuplicateExistingId(null);

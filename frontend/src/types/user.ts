@@ -34,3 +34,12 @@ export interface ChangePasswordRequest {
   current_password: string;
   new_password: string;
 }
+
+// Личные счётчики юзера для дашборда (Sprint 6, Phase 7).
+// Зеркало backend/app/schemas/user.py:UserStats — ответ GET /api/me/stats.
+export interface UserStats {
+  datasets_count: number;
+  analyses_count: number;
+  successful_analyses_count: number;
+  reports_count: number;
+}
