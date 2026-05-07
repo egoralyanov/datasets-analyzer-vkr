@@ -10,6 +10,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { adminApi } from "../api/admin";
+import { AdminUserDetailModal } from "../components/admin/AdminUserDetailModal";
+import { RolePill } from "../components/admin/RolePill";
 import type {
   AdminStats,
   AdminUserListItem,
@@ -20,6 +22,9 @@ const PAGE_SIZE = 20;
 
 export function Admin() {
   const [page, setPage] = useState(1);
+  // Sprint 6, Phase 5.4: клик по строке открывает AdminUserDetailModal с
+  // деталями выбранного юзера. null — модалка закрыта.
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const stats = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
@@ -107,6 +112,7 @@ export function Admin() {
                   key={u.id}
                   item={u}
                   index={(page - 1) * PAGE_SIZE + idx + 1}
+                  onOpen={() => setSelectedUserId(u.id)}
                 />
               ))}
             </ol>
@@ -130,6 +136,12 @@ export function Admin() {
           </div>
         )}
       </section>
+
+      <AdminUserDetailModal
+        open={selectedUserId !== null}
+        onClose={() => setSelectedUserId(null)}
+        userId={selectedUserId}
+      />
     </div>
   );
 }
@@ -230,45 +242,44 @@ function RateCard({
 function UserRow({
   item,
   index,
+  onOpen,
 }: {
   item: AdminUserListItem;
   index: number;
+  onOpen: () => void;
 }) {
-  const isAdmin = item.role === "admin";
   return (
-    <li className="grid grid-cols-[2.5rem_1fr_auto] items-start gap-4 px-1 py-4">
-      <span className="pt-0.5 font-mono text-sm text-paper-400">
-        {String(index).padStart(3, "0")}.
-      </span>
-      <div className="min-w-0">
-        <p className="truncate font-serif text-[1.0625rem] font-semibold leading-snug text-paper-900">
-          {item.username}
-        </p>
-        <p className="mt-1 truncate font-mono text-xs text-paper-700">
-          {item.email}
-        </p>
-        <p className="mt-1 font-mono text-xs text-paper-500">
-          Зарегистрирован {formatDate(item.created_at)}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <span
-          className={`border px-2 py-0.5 font-sans text-[0.6875rem] font-medium uppercase tracking-wider ${
-            isAdmin
-              ? "border-info-500 text-info-700"
-              : "border-paper-400 text-paper-600"
-          }`}
-        >
-          {isAdmin ? "ADMIN" : "USER"}
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="grid w-full grid-cols-[2.5rem_1fr_auto] items-start gap-4 px-1 py-4 text-left transition-colors hover:bg-paper-100/50"
+      >
+        <span className="pt-0.5 font-mono text-sm text-paper-400">
+          {String(index).padStart(3, "0")}.
         </span>
-        <span className="font-mono text-[0.6875rem] text-paper-500">
-          dsets{" "}
-          <span className="text-paper-700">{item.datasets_count}</span>
-          <span className="mx-1">·</span>
-          analyses{" "}
-          <span className="text-paper-700">{item.analyses_count}</span>
-        </span>
-      </div>
+        <div className="min-w-0">
+          <p className="truncate font-serif text-[1.0625rem] font-semibold leading-snug text-paper-900">
+            {item.username}
+          </p>
+          <p className="mt-1 truncate font-mono text-xs text-paper-700">
+            {item.email}
+          </p>
+          <p className="mt-1 font-mono text-xs text-paper-500">
+            Зарегистрирован {formatDate(item.created_at)}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <RolePill role={item.role} />
+          <span className="font-mono text-[0.6875rem] text-paper-500">
+            dsets{" "}
+            <span className="text-paper-700">{item.datasets_count}</span>
+            <span className="mx-1">·</span>
+            analyses{" "}
+            <span className="text-paper-700">{item.analyses_count}</span>
+          </span>
+        </div>
+      </button>
     </li>
   );
 }

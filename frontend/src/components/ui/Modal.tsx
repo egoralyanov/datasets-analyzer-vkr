@@ -34,6 +34,14 @@ type Props = {
   subtitle?: string;
   /** Если true — esc, click-outside и крестик не закрывают модалку. */
   disableDismiss?: boolean;
+  /**
+   * Если true — модалка остаётся в DOM, но НЕ слушает Esc/Tab, не делает
+   * автофокус и не закрывается по клику на overlay. Используется, когда
+   * поверх неё открыта вторая модалка (Sprint 6, Phase 5.4): нижняя
+   * визуально на месте, но клавиатура и фокус принадлежат верхней.
+   * aria-hidden=true даёт скрин-ридерам понять, что активна верхняя.
+   */
+  inactive?: boolean;
   /** Контент модалки (тело + кнопки). Пробрасывается как children. */
   children: React.ReactNode;
   size?: Size;
@@ -45,6 +53,7 @@ export function Modal({
   title,
   subtitle,
   disableDismiss = false,
+  inactive = false,
   children,
   size = "md",
 }: Props) {
@@ -55,6 +64,7 @@ export function Modal({
       title={title}
       subtitle={subtitle}
       disableDismiss={disableDismiss}
+      inactive={inactive}
       size={size}
     >
       {children}
@@ -69,6 +79,7 @@ function ModalInner({
   title,
   subtitle,
   disableDismiss,
+  inactive,
   children,
   size = "md",
 }: InnerProps) {
@@ -76,7 +87,11 @@ function ModalInner({
   const titleId = useId();
 
   // Esc + focus-trap. Возврат фокуса на предыдущий activeElement.
+  // При inactive=true модалка визуально остаётся, но НЕ слушает клавиатуру
+  // и не делает автофокус — это даёт корректное поведение для стэка
+  // модалок, где верхняя владеет фокусом и клавишами.
   useEffect(() => {
+    if (inactive) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
 
     // Автофокус на первый focusable. Откладываем на следующий tick, чтобы
@@ -121,12 +136,16 @@ function ModalInner({
       clearTimeout(t);
       previouslyFocused?.focus?.();
     };
-  }, [disableDismiss, onClose]);
+  }, [disableDismiss, onClose, inactive]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-paper-900/50 p-4"
-      onClick={() => !disableDismiss && onClose()}
+      aria-hidden={inactive ? true : undefined}
+      onClick={() => {
+        if (inactive || disableDismiss) return;
+        onClose();
+      }}
     >
       <div
         ref={dialogRef}
@@ -153,7 +172,7 @@ function ModalInner({
           <button
             type="button"
             onClick={onClose}
-            disabled={disableDismiss}
+            disabled={disableDismiss || inactive}
             className="font-sans text-sm text-paper-500 transition-colors hover:text-ink-700 disabled:opacity-50"
             aria-label="Закрыть"
           >
