@@ -13,6 +13,7 @@ import { useAuthStore } from "../store/authStore";
 import { datasetsApi } from "../api/datasets";
 import { analysesApi } from "../api/analyses";
 import { formatNumber } from "../lib/format";
+import { TASK_TYPE_LABEL } from "../lib/taskTypes";
 import type { TaskTypeCode } from "../types/analysis";
 
 export function Landing() {
@@ -24,14 +25,6 @@ export function Landing() {
 
   return <GuestLanding />;
 }
-
-const TASK_TYPE_LABEL: Record<TaskTypeCode, string> = {
-  BINARY_CLASSIFICATION: "Бинарная классификация",
-  MULTICLASS_CLASSIFICATION: "Многоклассовая классификация",
-  REGRESSION: "Регрессия",
-  CLUSTERING: "Кластеризация",
-  NOT_READY: "Данные не готовы для ML",
-};
 
 // Dashboard для авторизованного пользователя. Использует существующие
 // эндпоинты: datasetsApi.list (полный список — берём длину) и

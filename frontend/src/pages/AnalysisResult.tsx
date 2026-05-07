@@ -17,16 +17,17 @@
 // useReportActions, sticky-bar и карточки делят один статус.
 //
 // См. frontend/DESIGN_TOKENS.md, разделы 3 и 8.4 + plans/06-...md, Phase 2.5.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { analysesApi } from "../api/analyses";
 import { datasetsApi } from "../api/datasets";
 import { useAnalysisPolling } from "../hooks/useAnalysisPolling";
 import { useBaselineActions } from "../hooks/useBaselineActions";
 import { useReportActions } from "../hooks/useReportActions";
 import { DatasetSummary } from "../components/analysis/DatasetSummary";
+import { DeleteAnalysisModal } from "../components/analysis/DeleteAnalysisModal";
 import { QualityFlags } from "../components/analysis/QualityFlags";
 import { Distributions } from "../components/analysis/Distributions";
 import { TaskRecommendationCard } from "../components/analysis/TaskRecommendationCard";
@@ -79,6 +80,8 @@ export function AnalysisResult() {
   const baselineActions = useBaselineActions(id);
   const reportActions = useReportActions(id);
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
   // Скролл вверх при смене анализа.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -115,13 +118,23 @@ export function AnalysisResult() {
   return (
     <>
       <Band tone="50" className="pt-10 pb-6">
-        <button
-          type="button"
-          onClick={() => navigate("/upload")}
-          className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500 underline-offset-2 hover:text-ink-700 hover:underline"
-        >
-          ← НАЗАД К ДАТАСЕТАМ
-        </button>
+        <div className="flex items-baseline justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => navigate("/upload")}
+            className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500 underline-offset-2 hover:text-ink-700 hover:underline"
+          >
+            ← НАЗАД К ДАТАСЕТАМ
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="inline-flex items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-wider text-critical-600 underline-offset-2 hover:text-critical-700 hover:underline"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            УДАЛИТЬ АНАЛИЗ
+          </button>
+        </div>
         <PageHeader
           filename={filename}
           status={analysis.status}
@@ -216,6 +229,17 @@ export function AnalysisResult() {
           report={reportActions}
         />
       )}
+
+      <DeleteAnalysisModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        analysisId={id}
+        datasetFilename={filename}
+        taskTypeCode={result.data?.task_recommendation?.task_type_code ?? null}
+        completedAt={analysis.finished_at}
+        startedAt={analysis.started_at}
+        onDeleted={() => navigate("/history")}
+      />
     </>
   );
 }

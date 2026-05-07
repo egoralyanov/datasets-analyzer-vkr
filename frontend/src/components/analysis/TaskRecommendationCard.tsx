@@ -20,17 +20,10 @@ import type {
   TaskRecommendation,
   TaskTypeCode,
 } from "../../types/analysis";
+import { TASK_TYPE_LABEL } from "../../lib/taskTypes";
 
 type Props = {
   recommendation: TaskRecommendation | null;
-};
-
-const TASK_TYPE_LABEL: Record<TaskTypeCode, string> = {
-  BINARY_CLASSIFICATION: "Бинарная классификация",
-  MULTICLASS_CLASSIFICATION: "Многоклассовая классификация",
-  REGRESSION: "Регрессия",
-  CLUSTERING: "Кластеризация",
-  NOT_READY: "Данные не готовы для ML",
 };
 
 const SOURCE_LABEL: Record<RecommendationSource, string> = {

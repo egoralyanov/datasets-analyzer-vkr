@@ -19,8 +19,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { analysesApi } from "../api/analyses";
+import { DeleteAnalysisModal } from "../components/analysis/DeleteAnalysisModal";
 import type {
   AnalysisListItem,
   AnalysisListResponse,
@@ -57,6 +58,10 @@ export function History() {
   const [statusFilter, setStatusFilter] = useState<AnalysisStatus | "all">(
     "all",
   );
+  // Какой анализ собираемся удалять (null = модалка закрыта). Храним
+  // целиком элемент списка, чтобы пробросить filename / task / dates
+  // в DeleteAnalysisModal без повторного запроса.
+  const [toDelete, setToDelete] = useState<AnalysisListItem | null>(null);
 
   const query = useQuery<AnalysisListResponse>({
     queryKey: ["history", page, statusFilter],
@@ -128,6 +133,7 @@ export function History() {
                   key={item.id}
                   item={item}
                   index={(page - 1) * PAGE_SIZE + idx + 1}
+                  onDelete={() => setToDelete(item)}
                 />
               ))}
             </ol>
@@ -146,6 +152,16 @@ export function History() {
           </>
         )}
       </div>
+
+      <DeleteAnalysisModal
+        open={toDelete !== null}
+        onClose={() => setToDelete(null)}
+        analysisId={toDelete?.id ?? null}
+        datasetFilename={toDelete?.dataset_name ?? null}
+        taskTypeCode={toDelete?.recommended_task_type ?? null}
+        completedAt={toDelete?.finished_at ?? null}
+        startedAt={toDelete?.started_at ?? new Date().toISOString()}
+      />
     </div>
   );
 }
@@ -155,18 +171,24 @@ export default History;
 function AnalysisRow({
   item,
   index,
+  onDelete,
 }: {
   item: AnalysisListItem;
   index: number;
+  onDelete: () => void;
 }) {
   const startedAtFmt = formatDateTime(item.started_at);
   const durationFmt = computeDuration(item.started_at, item.finished_at);
 
+  // Trash2 — отдельная кнопка-сиблинг для Link. Внутрь <a> кнопку класть
+  // нельзя (невалидный HTML + Safari может проглотить клик). Hover-фон
+  // строки поднят на <li role="group">, чтобы при наведении на иконку
+  // фон не отскакивал, как было бы при hover'е на самом Link.
   return (
-    <li>
+    <li className="group relative transition-colors hover:bg-paper-100/40">
       <Link
         to={`/analyses/${item.id}`}
-        className="grid grid-cols-[2.5rem_1fr_auto] items-start gap-4 px-1 py-4 transition-colors hover:bg-paper-100/40"
+        className="grid grid-cols-[2.5rem_1fr_auto] items-start gap-4 py-4 pl-1 pr-12"
       >
         <span className="pt-0.5 font-mono text-sm text-paper-400">
           {String(index).padStart(2, "0")}.
@@ -210,6 +232,14 @@ function AnalysisRow({
           )}
         </div>
       </Link>
+      <button
+        type="button"
+        aria-label="Удалить анализ"
+        onClick={onDelete}
+        className="absolute right-2 top-4 inline-flex h-8 w-8 items-center justify-center text-paper-500 transition-colors group-hover:text-critical-600 hover:!text-critical-700"
+      >
+        <Trash2 className="h-4 w-4" aria-hidden />
+      </button>
     </li>
   );
 }
