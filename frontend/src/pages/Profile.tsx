@@ -1,5 +1,9 @@
+// Страница профиля. Три режима: просмотр, редактирование, смена пароля.
+//
+// Стиль (Sprint 5, Phase 3.8): scientific/archive — §-заголовок, специмен-
+// definition list для просмотра, archive-кнопки и архивные инпуты.
 import { useState } from "react";
-import { Loader2, Mail, User as UserIcon, Lock } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { authApi } from "../api/auth";
 import { useAuthStore } from "../store/authStore";
 
@@ -15,21 +19,32 @@ export function Profile() {
   if (!user) return null; // защищено RequireAuth, но TS требует.
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold text-slate-900">Профиль</h1>
+    <div className="mx-auto max-w-[760px] px-8 py-12 lg:px-16">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        АККАУНТ
+      </p>
+      <h1 className="mt-2 flex items-baseline gap-3 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
+        <span className="font-sans text-base font-medium text-paper-400">
+          §
+        </span>
+        Профиль
+      </h1>
 
       {flash && (
-        <div className="mt-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+        <div className="mt-6 border-l-[3px] border-success-500 bg-paper-50 px-4 py-2 font-serif text-sm leading-relaxed text-paper-700">
+          <span className="font-sans text-xs font-medium uppercase tracking-wider text-success-700">
+            ✓ ОК ·
+          </span>{" "}
           {flash}
         </div>
       )}
       {error && (
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div className="mt-6 border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
           {error}
         </div>
       )}
 
-      <div className="mt-6 rounded-lg border border-slate-200 bg-white shadow-sm p-6">
+      <div className="mt-8">
         {mode === "view" && (
           <ViewMode
             onEdit={() => {
@@ -64,7 +79,9 @@ export function Profile() {
             onCancel={() => setMode("view")}
             onSaved={() => {
               setMode("view");
-              setFlash("Пароль обновлён. Старые сессии остаются активными до истечения токена.");
+              setFlash(
+                "Пароль обновлён. Старые сессии остаются активными до истечения токена.",
+              );
               setError(null);
             }}
             onError={(msg) => {
@@ -88,52 +105,51 @@ function ViewMode({
   const user = useAuthStore((s) => s.user)!;
   return (
     <>
-      <dl className="space-y-4">
-        <Row icon={<Mail className="h-4 w-4 text-slate-500" />} label="Email" value={user.email} />
-        <Row icon={<UserIcon className="h-4 w-4 text-slate-500" />} label="Username" value={user.username} />
-        <Row label="Роль" value={user.role} />
-        <Row
-          label="Зарегистрирован"
-          value={new Date(user.created_at).toLocaleString("ru-RU")}
-        />
-      </dl>
+      <div className="border border-paper-300 bg-paper-50">
+        <dl className="divide-y divide-paper-200">
+          <Row label="Email" value={user.email} mono />
+          <Row label="Username" value={user.username} mono />
+          <Row label="Роль" value={user.role.toUpperCase()} mono />
+          <Row
+            label="Зарегистрирован"
+            value={new Date(user.created_at).toLocaleString("ru-RU")}
+            mono
+          />
+        </dl>
+      </div>
       <div className="mt-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
-        >
-          Изменить профиль
-        </button>
-        <button
-          type="button"
-          onClick={onChangePassword}
-          className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
-        >
-          <Lock className="h-4 w-4" />
-          Сменить пароль
-        </button>
+        <ArchiveButton onClick={onEdit} variant="secondary">
+          ИЗМЕНИТЬ ПРОФИЛЬ
+        </ArchiveButton>
+        <ArchiveButton onClick={onChangePassword} variant="secondary">
+          СМЕНИТЬ ПАРОЛЬ
+        </ArchiveButton>
       </div>
     </>
   );
 }
 
 function Row({
-  icon,
   label,
   value,
+  mono = false,
 }: {
-  icon?: React.ReactNode;
   label: string;
   value: string;
+  mono?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <dt className="w-40 text-sm text-slate-500 flex items-center gap-2">
-        {icon}
+    <div className="grid grid-cols-[12rem_1fr] gap-6 px-5 py-3">
+      <dt className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
         {label}
       </dt>
-      <dd className="text-sm text-slate-900 break-all">{value}</dd>
+      <dd
+        className={`break-all text-sm text-paper-800 ${
+          mono ? "font-mono" : "font-sans"
+        }`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -168,20 +184,19 @@ function EditProfileForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-5">
       <Field label="Email" htmlFor="edit-email">
-        <input
+        <ArchiveInput
           id="edit-email"
           type="email"
           autoComplete="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
         />
       </Field>
       <Field label="Username" htmlFor="edit-username">
-        <input
+        <ArchiveInput
           id="edit-username"
           type="text"
           autoComplete="username"
@@ -189,26 +204,21 @@ function EditProfileForm({
           minLength={3}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
         />
       </Field>
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={loading}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
-        >
-          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          Сохранить
-        </button>
-        <button
+        <ArchiveButton type="submit" disabled={loading}>
+          {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          СОХРАНИТЬ
+        </ArchiveButton>
+        <ArchiveButton
           type="button"
           onClick={onCancel}
           disabled={loading}
-          className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
+          variant="secondary"
         >
-          Отмена
-        </button>
+          ОТМЕНА
+        </ArchiveButton>
       </div>
     </form>
   );
@@ -252,20 +262,19 @@ function ChangePasswordForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-5">
       <Field label="Текущий пароль" htmlFor="cp-current">
-        <input
+        <ArchiveInput
           id="cp-current"
           type="password"
           autoComplete="current-password"
           required
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
         />
       </Field>
       <Field label="Новый пароль" htmlFor="cp-new">
-        <input
+        <ArchiveInput
           id="cp-new"
           type="password"
           autoComplete="new-password"
@@ -273,11 +282,10 @@ function ChangePasswordForm({
           minLength={8}
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
         />
       </Field>
       <Field label="Повторите новый пароль" htmlFor="cp-confirm">
-        <input
+        <ArchiveInput
           id="cp-confirm"
           type="password"
           autoComplete="new-password"
@@ -285,26 +293,21 @@ function ChangePasswordForm({
           minLength={8}
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
         />
       </Field>
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={loading}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
-        >
-          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          Сменить пароль
-        </button>
-        <button
+        <ArchiveButton type="submit" disabled={loading}>
+          {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          СМЕНИТЬ ПАРОЛЬ
+        </ArchiveButton>
+        <ArchiveButton
           type="button"
           onClick={onCancel}
           disabled={loading}
-          className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
+          variant="secondary"
         >
-          Отмена
-        </button>
+          ОТМЕНА
+        </ArchiveButton>
       </div>
     </form>
   );
@@ -321,11 +324,52 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-900">
+      <label
+        htmlFor={htmlFor}
+        className="block font-sans text-xs font-medium uppercase tracking-wider text-paper-500"
+      >
         {label}
       </label>
-      <div className="mt-1">{children}</div>
+      <div className="mt-1.5">{children}</div>
     </div>
+  );
+}
+
+function ArchiveInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className="block w-full border border-paper-400 bg-paper-50 px-3 py-2 font-mono text-sm text-paper-800 placeholder:text-paper-400 focus:border-ink-700 focus:outline-none focus:ring-0"
+    />
+  );
+}
+
+function ArchiveButton({
+  children,
+  type = "button",
+  onClick,
+  disabled = false,
+  variant = "primary",
+}: {
+  children: React.ReactNode;
+  type?: "button" | "submit";
+  onClick?: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "secondary";
+}) {
+  const cls =
+    variant === "primary"
+      ? "border border-ink-700 bg-ink-700 text-paper-50 hover:bg-ink-800"
+      : "border border-ink-700 bg-paper-50 text-ink-700 hover:bg-ink-700 hover:text-paper-50";
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center gap-2 px-4 py-2 font-sans text-xs font-medium uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${cls}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -337,7 +381,8 @@ function extractDetail(err: unknown): string | null {
     typeof (err as { response?: { data?: { detail?: unknown } } }).response?.data
       ?.detail === "string"
   ) {
-    return (err as { response: { data: { detail: string } } }).response.data.detail;
+    return (err as { response: { data: { detail: string } } }).response.data
+      .detail;
   }
   return null;
 }

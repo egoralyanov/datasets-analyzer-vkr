@@ -1,5 +1,18 @@
+// Модалка запуска анализа.
+//
+// Стиль: scientific/archive — overlay с paper-фоном и единственной разрешённой
+// `shadow-overlay` (см. DESIGN_TOKENS.md, раздел 5); форма в hairline-обводке,
+// инпуты архивные, кнопки в archive-стиле.
+//
+// Реализация (Sprint 6, Phase 1): выделенный `ModalInner` монтируется только
+// при `open=true`. Это даёт «бесплатный» сброс формы при каждом открытии
+// (новая инстанция → `useState("")` стартует заново) — без useEffect-сброса
+// и без eslint-error `set-state-in-effect`. Esc-listener живёт внутри
+// `ModalInner`, потому что снаружи он бы ничего не делал.
 import { useEffect, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
+
+type SubmitParams = { target_column: string | null };
 
 type Props = {
   open: boolean;
@@ -7,62 +20,62 @@ type Props = {
   isPending: boolean;
   errorText?: string | null;
   onClose: () => void;
-  onSubmit: (params: { target_column: string | null }) => void;
+  onSubmit: (params: SubmitParams) => void;
 };
 
-export function StartAnalysisModal({
-  open,
+export function StartAnalysisModal(props: Props) {
+  if (!props.open) return null;
+  return <ModalInner {...props} />;
+}
+
+type InnerProps = Omit<Props, "open">;
+
+function ModalInner({
   columns,
   isPending,
   errorText,
   onClose,
   onSubmit,
-}: Props) {
+}: InnerProps) {
   const [target, setTarget] = useState<string>("");
 
-  // Сброс формы при открытии модалки.
   useEffect(() => {
-    if (open) {
-      setTarget("");
-    }
-  }, [open]);
-
-  // Esc закрывает модалку.
-  useEffect(() => {
-    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isPending) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, isPending, onClose]);
-
-  if (!open) return null;
+  }, [isPending, onClose]);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-paper-900/50 p-4"
       onClick={() => !isPending && onClose()}
     >
       <div
-        className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+        className="w-full max-w-md border border-paper-300 bg-paper-50 p-6 shadow-overlay"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Запустить анализ
-          </h2>
+          <div>
+            <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+              ЗАПУСК
+            </p>
+            <h2 className="mt-1 font-serif text-[1.375rem] font-semibold leading-snug text-paper-900">
+              Запустить анализ
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isPending}
-            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+            className="font-sans text-sm text-paper-500 transition-colors hover:text-ink-700 disabled:opacity-50"
             aria-label="Закрыть"
           >
-            <X className="h-4 w-4" />
+            ✕
           </button>
         </div>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-2 font-serif text-sm leading-relaxed text-paper-600">
           Если у вас есть колонка-цель для предсказания — укажите её. Если
           нет — система проанализирует структуру данных и предложит подходящие
           типы задач машинного обучения.
@@ -80,7 +93,7 @@ export function StartAnalysisModal({
           <div>
             <label
               htmlFor="target-column"
-              className="block text-sm font-medium text-slate-700"
+              className="block font-sans text-xs font-medium uppercase tracking-wider text-paper-500"
             >
               Целевая переменная (опционально)
             </label>
@@ -89,7 +102,7 @@ export function StartAnalysisModal({
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               disabled={isPending}
-              className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+              className="mt-1.5 block w-full border border-paper-400 bg-paper-50 px-3 py-2 font-mono text-sm text-paper-800 focus:border-ink-700 focus:outline-none focus:ring-0 disabled:opacity-60"
             >
               <option value="">Без целевой переменной</option>
               {columns.map((c) => (
@@ -101,7 +114,7 @@ export function StartAnalysisModal({
           </div>
 
           {errorText && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+            <div className="border-l-[3px] border-critical-500 bg-critical-50/70 px-3 py-2 font-sans text-xs text-critical-700">
               {errorText}
             </div>
           )}
@@ -111,17 +124,17 @@ export function StartAnalysisModal({
               type="button"
               onClick={onClose}
               disabled={isPending}
-              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              className="border border-paper-400 bg-paper-50 px-4 py-2 font-sans text-xs font-medium uppercase tracking-wider text-paper-600 transition-colors hover:border-ink-700 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Отмена
+              ОТМЕНА
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 border border-ink-700 bg-ink-700 px-4 py-2 font-sans text-xs font-medium uppercase tracking-wider text-paper-50 transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Запустить
+              {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              ЗАПУСТИТЬ
             </button>
           </div>
         </form>

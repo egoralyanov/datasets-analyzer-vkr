@@ -1,27 +1,50 @@
+// Страница загрузки и управления датасетами.
+//
+// Стиль (Sprint 5, Phase 3.6): scientific/archive — серифные §-заголовки,
+// metadata в Mono, кнопки в archive-стиле, список датасетов как нумерованный
+// каталог с hairline-руллями (по аналогии с SimilarDatasetsCard).
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { datasetsApi } from "../api/datasets";
 import { analysesApi } from "../api/analyses";
 import type { Dataset, DatasetWithPreview } from "../types/dataset";
 import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
+import { PLURAL_FORMS, pluralize } from "../lib/pluralize";
 import { FileDropZone } from "../components/upload/FileDropZone";
 import { DatasetPreview } from "../components/upload/DatasetPreview";
+import { DuplicateDatasetNotice } from "../components/upload/DuplicateDatasetNotice";
 import { StartAnalysisModal } from "../components/upload/StartAnalysisModal";
+import { DeleteDatasetModal } from "../components/upload/DeleteDatasetModal";
 
 type Toast = { kind: "success" | "error"; text: string } | null;
+type DeleteTarget = { id: string; filename: string };
 
 export function Upload() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const previewRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [current, setCurrent] = useState<DatasetWithPreview | null>(null);
   const [uploadPercent, setUploadPercent] = useState(0);
   const [toast, setToast] = useState<Toast>(null);
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  // Sprint 6, Phase 5.1: window.confirm заменён на DeleteDatasetModal с
+  // загрузкой usage (analyses+reports counts). Open state — целевая запись
+  // или null когда модалка закрыта.
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  // Sprint 6, Phase 5.3: 409 на upload (тот же file_hash) → показываем
+  // inline-блок с предложением открыть существующий датасет вместо
+  // banner-toast'а с английским detail. id из ответа existing_dataset_id.
+  const [duplicateExistingId, setDuplicateExistingId] = useState<string | null>(
+    null,
+  );
+  // Key для FileDropZone: бамп при «ВЫБРАТЬ ДРУГОЙ ФАЙЛ» сбрасывает его
+  // внутренний state (file/error) через ремаунт без подъёма state наружу.
+  const [dropZoneKey, setDropZoneKey] = useState(0);
 
   // Авто-скрытие тоста через 3 секунды.
   useEffect(() => {
@@ -40,12 +63,26 @@ export function Upload() {
     onSuccess: (data) => {
       setCurrent(data);
       setUploadPercent(0);
+      setDuplicateExistingId(null);
       queryClient.invalidateQueries({ queryKey: ["datasets"] });
       setToast({ kind: "success", text: "Датасет успешно загружен." });
       previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     },
     onError: (err) => {
       setUploadPercent(0);
+      const dup = extractDuplicate(err);
+      if (dup) {
+        // 409 + existing_dataset_id — на месте превью покажем
+        // DuplicateDatasetNotice. Старое превью убираем, banner-toast не
+        // зажигаем: notice самодостаточен.
+        setDuplicateExistingId(dup);
+        setCurrent(null);
+        previewRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        return;
+      }
       setToast({ kind: "error", text: extractDatasetError(err) });
     },
   });
@@ -54,6 +91,8 @@ export function Upload() {
     mutationFn: (id: string) => datasetsApi.get(id),
     onSuccess: (data) => {
       setCurrent(data);
+      // Если открывали существующий из notice — закрываем notice.
+      setDuplicateExistingId(null);
       previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     },
     onError: () => {
@@ -61,21 +100,38 @@ export function Upload() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => datasetsApi.remove(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["datasets"] });
-      if (current?.id === id) setCurrent(null);
-      setToast({ kind: "success", text: "Датасет удалён." });
-    },
-    onError: () => {
-      setToast({ kind: "error", text: "Не удалось удалить датасет." });
-    },
-  });
+  // Sprint 6, Phase 7: dashboard передаёт ?open={id} при клике на строку
+  // последних датасетов. Один раз дёргаем openMutation на этот id и
+  // удаляем параметр из URL, чтобы повторный mount страницы не открывал
+  // тот же датасет ещё раз. mutate триггерится по mountу — listQuery
+  // ждать не обязательно, GET /datasets/{id} работает независимо.
+  const openIdFromUrl = searchParams.get("open");
+  useEffect(() => {
+    if (!openIdFromUrl) return;
+    if (current?.id === openIdFromUrl) return;
+    if (openMutation.isPending) return;
+    openMutation.mutate(openIdFromUrl);
+    const next = new URLSearchParams(searchParams);
+    next.delete("open");
+    setSearchParams(next, { replace: true });
+    // openMutation/searchParams/setSearchParams умышленно вне зависимостей:
+    // нужен strict «дёрнуть один раз на каждый новый ?open=» — id-зависимость
+    // достаточна, у openMutation внутри уже idempotency через current?.id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openIdFromUrl]);
 
-  const onDelete = (id: string, name: string) => {
-    if (!window.confirm(`Удалить датасет «${name}»?`)) return;
-    deleteMutation.mutate(id);
+  const onChooseAnotherFile = () => {
+    setDuplicateExistingId(null);
+    setDropZoneKey((k) => k + 1);
+  };
+
+  // deleteMutation вынесен в DeleteDatasetModal. Тут только хук-callback,
+  // чтобы при удалении активного датасета закрыть его превью.
+  const onDeleteRequest = (id: string, name: string) => {
+    setDeleteTarget({ id, filename: name });
+  };
+  const onDeleted = (id: string) => {
+    if (current?.id === id) setCurrent(null);
   };
 
   const startAnalysisMutation = useMutation({
@@ -94,43 +150,66 @@ export function Upload() {
   });
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold text-slate-900">Загрузка датасета</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        Поддерживаются CSV и XLSX. Файл сохраняется только для вашего аккаунта.
+    <div className="mx-auto max-w-[1100px] px-8 py-12 lg:px-16">
+      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+        ЗАГРУЗКА И УПРАВЛЕНИЕ
+      </p>
+      <h1 className="mt-2 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
+        Датасеты
+      </h1>
+      <p className="mt-3 max-w-2xl font-serif text-[0.9375rem] leading-relaxed text-paper-600">
+        Поддерживаются CSV и XLSX. Файл сохраняется только для вашего аккаунта,
+        кодировка и разделитель определяются автоматически.
       </p>
 
       {toast && (
         <div
-          className={`mt-4 rounded-md p-3 text-sm border ${
+          className={`mt-6 border-l-[3px] px-4 py-2 font-sans text-sm ${
             toast.kind === "success"
-              ? "border-green-200 bg-green-50 text-green-800"
-              : "border-red-200 bg-red-50 text-red-800"
+              ? "border-success-500 bg-paper-50 text-success-700"
+              : "border-critical-500 bg-critical-50/70 text-critical-700"
           }`}
         >
           {toast.text}
         </div>
       )}
 
-      <div className="mt-6">
+      <div className="mt-10">
+        <SectionHeader number={1} title="Загрузка нового файла" />
         <FileDropZone
+          key={dropZoneKey}
           onUpload={(file) => uploadMutation.mutate(file)}
           uploading={uploadMutation.isPending}
           uploadPercent={uploadPercent}
         />
       </div>
 
-      <div ref={previewRef} className="mt-8">
-        {current && (
-          <DatasetPreview
-            data={current}
-            onDelete={() => onDelete(current.id, current.original_filename)}
-            onAnalyze={() => {
-              setAnalyzeError(null);
-              setAnalyzeOpen(true);
-            }}
-          />
-        )}
+      <div ref={previewRef} className="mt-12">
+        {duplicateExistingId !== null ? (
+          <>
+            <SectionHeader number={2} title="Превью датасета" />
+            <DuplicateDatasetNotice
+              existingDatasetId={duplicateExistingId}
+              isOpening={openMutation.isPending}
+              onOpenExisting={(id) => openMutation.mutate(id)}
+              onChooseAnother={onChooseAnotherFile}
+            />
+          </>
+        ) : current ? (
+          <>
+            <SectionHeader number={2} title="Превью датасета" />
+            <DatasetPreview
+              data={current}
+              onDelete={() =>
+                onDeleteRequest(current.id, current.original_filename)
+              }
+              onAnalyze={() => {
+                setAnalyzeError(null);
+                setAnalyzeOpen(true);
+              }}
+            />
+          </>
+        ) : null}
       </div>
 
       <StartAnalysisModal
@@ -142,33 +221,57 @@ export function Upload() {
         onSubmit={(params) => startAnalysisMutation.mutate(params)}
       />
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold text-slate-900">Мои датасеты</h2>
+      <DeleteDatasetModal
+        open={deleteTarget !== null}
+        datasetId={deleteTarget?.id ?? null}
+        filename={deleteTarget?.filename ?? null}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={onDeleted}
+      />
+
+      <section className="mt-12">
+        <SectionHeader
+          number={current ? 3 : 2}
+          title="Мои датасеты"
+          note={
+            listQuery.data
+              ? `${listQuery.data.length} ${pluralize(
+                  listQuery.data.length,
+                  PLURAL_FORMS.record,
+                )}`
+              : undefined
+          }
+        />
         {listQuery.isPending ? (
-          <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Загрузка…
+          <div className="flex items-center gap-2 border-l-[3px] border-info-500 bg-paper-50 px-4 py-3 font-sans text-sm text-paper-600">
+            <Loader2 className="h-4 w-4 animate-spin text-info-500" />
+            Загрузка списка…
           </div>
         ) : listQuery.isError ? (
-          <p className="mt-4 text-sm text-red-700">
+          <p className="border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
             Не удалось загрузить список датасетов.
           </p>
         ) : listQuery.data && listQuery.data.length > 0 ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {listQuery.data.map((d) => (
-              <DatasetCard
+          <ol className="divide-y divide-paper-200 border-y border-paper-200">
+            {listQuery.data.map((d, idx) => (
+              <DatasetRow
                 key={d.id}
+                index={idx + 1}
                 dataset={d}
                 isActive={current?.id === d.id}
-                isOpening={openMutation.isPending && openMutation.variables === d.id}
-                isDeleting={deleteMutation.isPending && deleteMutation.variables === d.id}
+                isOpening={
+                  openMutation.isPending && openMutation.variables === d.id
+                }
+                isDeleting={
+                  deleteTarget !== null && deleteTarget.id === d.id
+                }
                 onOpen={() => openMutation.mutate(d.id)}
-                onDelete={() => onDelete(d.id, d.original_filename)}
+                onDelete={() => onDeleteRequest(d.id, d.original_filename)}
               />
             ))}
-          </div>
+          </ol>
         ) : (
-          <p className="mt-4 text-sm text-slate-500">
+          <p className="border-l-[3px] border-paper-400 bg-paper-100/60 px-4 py-2 font-serif text-sm text-paper-600">
             У вас пока нет загруженных датасетов.
           </p>
         )}
@@ -177,7 +280,34 @@ export function Upload() {
   );
 }
 
-function DatasetCard({
+function SectionHeader({
+  number,
+  title,
+  note,
+}: {
+  number: number;
+  title: string;
+  note?: string;
+}) {
+  return (
+    <header className="mb-5 flex items-baseline justify-between gap-4 border-b border-paper-300 pb-2">
+      <h2 className="flex items-baseline gap-3 font-serif text-[1.5rem] font-semibold leading-snug tracking-tight text-paper-900">
+        <span className="font-sans text-base font-medium text-paper-400">
+          §{number}
+        </span>
+        {title}
+      </h2>
+      {note && (
+        <span className="font-sans text-xs uppercase tracking-wider text-paper-500">
+          {note}
+        </span>
+      )}
+    </header>
+  );
+}
+
+function DatasetRow({
+  index,
   dataset,
   isActive,
   isOpening,
@@ -185,6 +315,7 @@ function DatasetCard({
   onOpen,
   onDelete,
 }: {
+  index: number;
   dataset: Dataset;
   isActive: boolean;
   isOpening: boolean;
@@ -192,56 +323,59 @@ function DatasetCard({
   onOpen: () => void;
   onDelete: () => void;
 }) {
-  const Icon = dataset.format === "xlsx" ? FileSpreadsheet : FileText;
-  const iconColor = dataset.format === "xlsx" ? "text-emerald-600" : "text-blue-600";
-  const ringClass = isActive ? "ring-2 ring-blue-500" : "hover:shadow-sm";
+  const sizeRows =
+    dataset.n_rows !== null && dataset.n_cols !== null
+      ? `${formatNumber(dataset.n_rows)} строк × ${formatNumber(dataset.n_cols)} колонок`
+      : null;
 
   return (
-    <div
-      className={`rounded-lg border border-slate-200 bg-white p-4 transition-shadow ${ringClass}`}
+    <li
+      className={`grid grid-cols-[2.5rem_1fr_auto] items-start gap-4 px-1 py-4 ${
+        isActive ? "border-l-[3px] border-ink-700 bg-paper-100/50 pl-3" : ""
+      }`}
     >
-      <div className="flex items-start gap-3">
-        <Icon className={`h-5 w-5 shrink-0 ${iconColor}`} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-900">
-            {dataset.original_filename}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {dataset.n_rows !== null && dataset.n_cols !== null
-              ? `${formatNumber(dataset.n_rows)} строк × ${formatNumber(
-                  dataset.n_cols,
-                )} колонок · `
-              : ""}
-            {formatBytes(dataset.file_size_bytes)} ·{" "}
-            {formatDateTime(dataset.uploaded_at)}
-          </p>
-        </div>
+      <span className="pt-0.5 font-mono text-sm text-paper-400">
+        {String(index).padStart(2, "0")}.
+      </span>
+      <div className="min-w-0">
+        <p className="truncate font-serif text-[1.0625rem] font-semibold leading-snug text-paper-900">
+          {dataset.original_filename}
+        </p>
+        <p className="mt-1 font-mono text-xs text-paper-500">
+          {sizeRows && <>{sizeRows} · </>}
+          {formatBytes(dataset.file_size_bytes)} · {formatDateTime(dataset.uploaded_at)}
+        </p>
+        <p className="mt-1 font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
+          ФОРМАТ:{" "}
+          <span className="font-mono normal-case tracking-normal text-paper-700">
+            {dataset.format}
+          </span>
+        </p>
       </div>
-      <div className="mt-3 flex justify-end gap-2">
+      <div className="flex shrink-0 gap-2">
         <button
           type="button"
           onClick={onOpen}
           disabled={isOpening}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 border border-ink-700 bg-paper-50 px-3 py-1.5 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 transition-colors hover:bg-ink-700 hover:text-paper-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isOpening && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Открыть
+          ОТКРЫТЬ
         </button>
         <button
           type="button"
           onClick={onDelete}
           disabled={isDeleting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 border border-paper-400 bg-paper-50 px-3 py-1.5 font-sans text-xs font-medium uppercase tracking-wider text-paper-600 transition-colors hover:border-critical-500 hover:text-critical-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isDeleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Удалить
+          УДАЛИТЬ
         </button>
       </div>
-    </div>
+    </li>
   );
 }
 
-// Карта серверных кодов в сообщение об ошибке для запуска анализа.
 function extractAnalysisError(err: unknown): string {
   const e = err as {
     response?: { status?: number; data?: { detail?: unknown } };
@@ -253,7 +387,20 @@ function extractAnalysisError(err: unknown): string {
   return "Не удалось запустить анализ. Попробуйте ещё раз.";
 }
 
-// Карта серверных кодов в человеческие сообщения для загрузки датасета.
+// 409 на upload + existing_dataset_id в теле = бэк нашёл идентичный
+// file_hash у того же юзера (Phase 4.1). Возвращаем id, иначе null —
+// тогда вызывающий код упадёт в стандартный banner-toast.
+// Defensive: 409 без поля existing_dataset_id (например, какой-то другой
+// будущий конфликт) → null, не путаем notice с другим типом ошибки.
+function extractDuplicate(err: unknown): string | null {
+  const e = err as {
+    response?: { status?: number; data?: { existing_dataset_id?: unknown } };
+  };
+  if (e.response?.status !== 409) return null;
+  const id = e.response.data?.existing_dataset_id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
 function extractDatasetError(err: unknown): string {
   const e = err as {
     response?: { status?: number; data?: { detail?: unknown } };

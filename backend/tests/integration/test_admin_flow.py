@@ -10,6 +10,7 @@ Integration-тесты админ-эндпоинтов.
 """
 from __future__ import annotations
 
+import secrets
 from collections.abc import Callable
 from typing import Any
 
@@ -56,6 +57,7 @@ def test_stats_for_admin(
             original_filename=f"d{idx}.csv",
             storage_path=f"/data/datasets/{user_id}/d{idx}.csv",
             file_size_bytes=1024,
+            file_hash=secrets.token_hex(32),
             format="csv",
             n_rows=10, n_cols=3,
         )

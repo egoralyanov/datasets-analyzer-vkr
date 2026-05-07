@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Header } from "./components/layout/Header";
 import { ServerStatus } from "./components/ServerStatus";
+import { Toaster } from "./components/ui/Toaster";
 import { RequireAuth } from "./components/layout/RequireAuth";
 import { RequireAdmin } from "./components/layout/RequireAdmin";
 import { Landing } from "./pages/Landing";
@@ -28,7 +29,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+      <div className="min-h-screen bg-paper-50 text-paper-700 flex flex-col">
         <Header />
         <main className="flex-1">
           <Routes>
@@ -70,6 +71,7 @@ export default function App() {
         <div className="fixed bottom-4 right-4">
           <ServerStatus />
         </div>
+        <Toaster />
       </div>
     </BrowserRouter>
   );
@@ -77,7 +79,7 @@ export default function App() {
 
 function RouteSpinner() {
   return (
-    <div className="flex h-[60vh] items-center justify-center text-slate-500">
+    <div className="flex h-[60vh] items-center justify-center text-paper-500">
       <Loader2 className="h-6 w-6 animate-spin" />
     </div>
   );

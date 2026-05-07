@@ -1,4 +1,8 @@
-import { FileSpreadsheet, FileText, Play, Trash2 } from "lucide-react";
+// Превью датасета после загрузки/открытия: специмен-метаданных, колонки и
+// dtypes как нумерованный каталог, таблица первых строк в строгом стиле.
+//
+// Стиль (Sprint 5, Phase 3.6): scientific/archive — никаких скруглений,
+// никаких теней, hairline-таблицы, mono для числовых значений.
 import type { DatasetWithPreview } from "../../types/dataset";
 import { formatBytes, formatDateTime, formatNumber } from "../../lib/format";
 
@@ -8,26 +12,14 @@ interface Props {
   onAnalyze: () => void;
 }
 
-// Цвет pill-badge по dtype колонки.
-function dtypeBadgeClasses(dtype: string): string {
+function dtypeTone(dtype: string): string {
   const t = dtype.toLowerCase();
   if (t.includes("int") || t.includes("float") || t.includes("number")) {
-    return "bg-blue-100 text-blue-800";
+    return "text-info-700";
   }
-  if (t.includes("bool")) return "bg-slate-200 text-slate-800";
-  if (t.includes("date") || t.includes("time")) {
-    return "bg-purple-100 text-purple-800";
-  }
-  // object / string / category и прочее
-  return "bg-green-100 text-green-800";
-}
-
-function FormatIcon({ format }: { format: "csv" | "xlsx" }) {
-  return format === "xlsx" ? (
-    <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
-  ) : (
-    <FileText className="h-5 w-5 text-blue-600" />
-  );
+  if (t.includes("bool")) return "text-paper-600";
+  if (t.includes("date") || t.includes("time")) return "text-warning-700";
+  return "text-success-700";
 }
 
 function renderCell(value: unknown): string {
@@ -38,35 +30,35 @@ function renderCell(value: unknown): string {
 
 export function DatasetPreview({ data, onDelete, onAnalyze }: Props) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 p-5 border-b border-slate-200">
-        <div className="flex items-center gap-3 min-w-0">
-          <FormatIcon format={data.format} />
-          <h2 className="truncate text-lg font-semibold text-slate-900">
+    <div className="border border-paper-300 bg-paper-50">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-paper-200 px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <p className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+            ВЫБРАННЫЙ ФАЙЛ
+          </p>
+          <h3 className="mt-1 truncate font-serif text-[1.25rem] font-semibold leading-snug text-paper-900">
             {data.original_filename}
-          </h2>
+          </h3>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 gap-2">
           <button
             type="button"
             onClick={onAnalyze}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 border border-ink-700 bg-ink-700 px-4 py-2 font-sans text-xs font-medium uppercase tracking-wider text-paper-50 transition-colors hover:bg-ink-800"
           >
-            <Play className="h-4 w-4" />
-            Запустить анализ
+            ▶ ЗАПУСТИТЬ АНАЛИЗ
           </button>
           <button
             type="button"
             onClick={onDelete}
-            className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+            className="inline-flex items-center gap-1.5 border border-paper-400 bg-paper-50 px-3 py-2 font-sans text-xs font-medium uppercase tracking-wider text-paper-600 transition-colors hover:border-critical-500 hover:text-critical-700"
           >
-            <Trash2 className="h-4 w-4" />
-            Удалить
+            УДАЛИТЬ
           </button>
         </div>
       </div>
 
-      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b border-slate-200">
+      <dl className="grid grid-cols-2 gap-x-8 gap-y-3 border-b border-paper-200 px-5 py-4 sm:grid-cols-4">
         <Meta label="Формат" value={data.format.toUpperCase()} />
         <Meta label="Размер" value={formatBytes(data.file_size_bytes)} />
         <Meta
@@ -80,39 +72,48 @@ export function DatasetPreview({ data, onDelete, onAnalyze }: Props) {
         <Meta label="Загружено" value={formatDateTime(data.uploaded_at)} />
       </dl>
 
-      <div className="p-5 border-b border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-900">
-          Колонки и типы
-        </h3>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {data.preview.columns.map((col) => (
-            <span
-              key={col}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${dtypeBadgeClasses(
-                data.preview.dtypes[col] ?? "",
-              )}`}
-            >
-              {col}
-              <span className="opacity-70">
-                · {data.preview.dtypes[col] ?? "?"}
-              </span>
-            </span>
-          ))}
+      <div className="border-b border-paper-200 px-5 py-4">
+        <h4 className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+          КОЛОНКИ И ТИПЫ ({data.preview.columns.length})
+        </h4>
+        <div className="mt-3 grid gap-x-8 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+          {data.preview.columns.map((col, idx) => {
+            const dtype = data.preview.dtypes[col] ?? "?";
+            return (
+              <div
+                key={col}
+                className="grid grid-cols-[2rem_1fr_auto] items-baseline gap-2 border-b border-dotted border-paper-200 py-1 last:border-b-0"
+              >
+                <span className="font-mono text-xs text-paper-400">
+                  {String(idx + 1).padStart(2, "0")}
+                </span>
+                <span className="truncate font-mono text-sm text-paper-800">
+                  {col}
+                </span>
+                <span
+                  className={`font-mono text-xs ${dtypeTone(dtype)}`}
+                  title={dtype}
+                >
+                  {dtype}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div className="p-5">
-        <h3 className="text-sm font-semibold text-slate-900">
-          Превью первых строк ({data.preview.rows.length})
-        </h3>
-        <div className="mt-3 max-h-96 overflow-auto rounded-md border border-slate-200">
-          <table className="min-w-full text-sm">
-            <thead className="sticky top-0 bg-slate-50 text-left">
+      <div className="px-5 py-4">
+        <h4 className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+          ПРЕВЬЮ ПЕРВЫХ СТРОК ({data.preview.rows.length})
+        </h4>
+        <div className="mt-3 max-h-96 overflow-auto border border-paper-300">
+          <table className="min-w-full border-collapse text-sm">
+            <thead className="sticky top-0 bg-paper-100/70 text-left">
               <tr>
                 {data.preview.columns.map((col) => (
                   <th
                     key={col}
-                    className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap border-b border-slate-200"
+                    className="whitespace-nowrap border-b border-paper-300 px-3 py-2 font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500"
                   >
                     {col}
                   </th>
@@ -121,14 +122,17 @@ export function DatasetPreview({ data, onDelete, onAnalyze }: Props) {
             </thead>
             <tbody>
               {data.preview.rows.map((row, i) => (
-                <tr key={i} className="border-b border-slate-100 last:border-0">
+                <tr
+                  key={i}
+                  className="border-b border-paper-200 last:border-b-0"
+                >
                   {row.map((cell, j) => {
                     const text = renderCell(cell);
                     return (
                       <td
                         key={j}
                         title={text}
-                        className="px-3 py-1.5 text-slate-900 whitespace-nowrap max-w-xs truncate"
+                        className="max-w-xs truncate whitespace-nowrap px-3 py-1.5 font-mono text-xs text-paper-800"
                       >
                         {text}
                       </td>
@@ -147,8 +151,10 @@ export function DatasetPreview({ data, onDelete, onAnalyze }: Props) {
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className="mt-0.5 text-sm font-medium text-slate-900 break-all">
+      <dt className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+        {label}
+      </dt>
+      <dd className="mt-0.5 break-all font-mono text-sm text-paper-800">
         {value}
       </dd>
     </div>

@@ -1,142 +1,174 @@
-import { Database, FileText, Info } from "lucide-react";
+// Сводка датасета — компактный блок 5 карточек + горизонтальный bar chart
+// типов колонок.
+//
+// Sprint 6, Phase 2: переход от длинной definition-list к dashboard-layout
+// научной публикации. 5 stat-карточек (Строки / Столбцы / Размер / Пропуски /
+// Дубликаты) — крупные цифры в Plex Serif, лейблы uppercase tracking. Типы
+// колонок — пропорциональный CSS-сегментный bar (без Plotly, без SVG —
+// просто flexbox с шириной по доле). Цвета согласованы с DatasetPreview.
+//
+// Имя файла и target в этом блоке больше не показываем — они в шапке страницы.
+//
+// См. frontend/DESIGN_TOKENS.md, разделы 8.4 и 7 (manifesto).
 import type { MetaFeatures } from "../../types/analysis";
 import { formatNumber } from "../../lib/format";
 
 type Props = {
   meta: MetaFeatures;
-  filename?: string;
-  targetColumn: string | null;
 };
 
-const DTYPE_PILL_COLORS: Record<string, string> = {
-  int: "bg-blue-50 text-blue-700 border-blue-200",
-  float: "bg-blue-50 text-blue-700 border-blue-200",
-  str: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  object: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  bool: "bg-slate-100 text-slate-700 border-slate-200",
-  datetime: "bg-violet-50 text-violet-700 border-violet-200",
-};
+type Tone = "warning" | "info" | undefined;
 
-function pillColorFor(dtype: string): string {
-  for (const key of Object.keys(DTYPE_PILL_COLORS)) {
-    if (dtype.toLowerCase().includes(key)) return DTYPE_PILL_COLORS[key];
-  }
-  return "bg-slate-100 text-slate-700 border-slate-200";
-}
-
-export function DatasetSummary({ meta, filename, targetColumn }: Props) {
+export function DatasetSummary({ meta }: Props) {
   const totalMissingPct = (meta.total_missing_pct ?? 0) * 100;
+  const duplicatesPct = (meta.duplicate_rows_pct ?? 0) * 100;
   const sampling = meta.sampling;
+  const dtypeEntries = Object.entries(meta.dtype_counts || {});
+  const totalCols = dtypeEntries.reduce((sum, [, c]) => sum + c, 0) || 1;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6">
-      <div className="flex items-center gap-2">
-        <Database className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-slate-900">Сводка датасета</h2>
-      </div>
+    <div className="space-y-6">
+      <StatStrip
+        cells={[
+          { label: "Строк", value: formatNumber(meta.n_rows) },
+          { label: "Столбцов", value: formatNumber(meta.n_cols) },
+          {
+            label: "Размер в памяти",
+            value: `${(meta.memory_mb ?? 0).toFixed(2)} МБ`,
+          },
+          {
+            label: "Пропусков",
+            value: `${totalMissingPct.toFixed(2)}%`,
+            tone: totalMissingPct > 10 ? "warning" : undefined,
+          },
+          {
+            label: "Дубликатов",
+            value: `${duplicatesPct.toFixed(2)}%`,
+            tone: duplicatesPct > 5 ? "warning" : undefined,
+          },
+        ]}
+      />
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        <Stat label="Строк" value={formatNumber(meta.n_rows)} />
-        <Stat label="Столбцов" value={formatNumber(meta.n_cols)} />
-        <Stat
-          label="Размер в памяти"
-          value={`${(meta.memory_mb ?? 0).toFixed(2)} МБ`}
-        />
-      </div>
-
-      {filename && (
-        <p className="mt-4 flex items-center gap-1.5 text-sm text-slate-600">
-          <FileText className="h-4 w-4" />
-          <span className="truncate">{filename}</span>
-        </p>
+      {dtypeEntries.length > 0 && (
+        <DtypeBar entries={dtypeEntries} totalCols={totalCols} />
       )}
-
-      {targetColumn && (
-        <p className="mt-2 text-sm text-slate-600">
-          Целевая переменная:{" "}
-          <span className="font-medium text-slate-900">«{targetColumn}»</span>
-          {meta.target_kind && (
-            <span className="ml-2 text-slate-500">
-              (
-              {meta.target_kind === "categorical"
-                ? "категориальная"
-                : "числовая"}
-              )
-            </span>
-          )}
-        </p>
-      )}
-
-      <div className="mt-4">
-        <p className="text-xs uppercase tracking-wide text-slate-500">
-          Типы колонок
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {Object.entries(meta.dtype_counts || {}).map(([dtype, count]) => (
-            <span
-              key={dtype}
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${pillColorFor(
-                dtype,
-              )}`}
-            >
-              {dtype}
-              <span className="rounded bg-white/60 px-1 text-[10px]">
-                {count}
-              </span>
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Stat
-          label="Общая доля пропусков"
-          value={`${totalMissingPct.toFixed(1)}%`}
-          highlight={totalMissingPct > 10}
-        />
-        <Stat
-          label="Доля дубликатов"
-          value={`${((meta.duplicate_rows_pct ?? 0) * 100).toFixed(1)}%`}
-          highlight={(meta.duplicate_rows_pct ?? 0) > 0.05}
-        />
-      </div>
 
       {sampling?.sampled && (
-        <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
+        <div className="border-l-[3px] border-info-500 bg-paper-50 px-4 py-3">
+          <p className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-info-700">
+            ⓘ СЭМПЛИРОВАНИЕ
+          </p>
+          <p className="mt-1 font-serif text-sm leading-relaxed text-paper-700">
             Использован сэмпл из{" "}
-            <strong>{formatNumber(sampling.sample_size)}</strong> строк
-            (исходный размер{" "}
-            <strong>{formatNumber(sampling.original_size)}</strong>).
-            Сэмплирование стратифицированное по target — требование
-            производительности при размере свыше 50 000 строк.
-          </span>
+            <span className="font-mono">
+              {formatNumber(sampling.sample_size)}
+            </span>{" "}
+            строк (исходный размер{" "}
+            <span className="font-mono">
+              {formatNumber(sampling.original_size)}
+            </span>
+            ); стратифицировано по target.
+          </p>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
-function Stat({
+function StatStrip({
+  cells,
+}: {
+  cells: { label: string; value: string; tone?: Tone }[];
+}) {
+  // grid с paper-300 фоном и 1px gap создаёт hairline-разделители между
+  // карточками без необходимости border на каждой ячейке.
+  return (
+    <div className="grid grid-cols-2 gap-px border border-paper-300 bg-paper-300 sm:grid-cols-3 lg:grid-cols-5">
+      {cells.map((cell) => (
+        <StatCell key={cell.label} {...cell} />
+      ))}
+    </div>
+  );
+}
+
+function StatCell({
   label,
   value,
-  highlight = false,
+  tone,
 }: {
   label: string;
   value: string;
-  highlight?: boolean;
+  tone?: Tone;
 }) {
+  const valueClass =
+    tone === "warning"
+      ? "text-warning-700"
+      : tone === "info"
+        ? "text-info-700"
+        : "text-paper-900";
   return (
-    <div>
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="bg-paper-50 px-4 py-4">
+      <p className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+        {label.toUpperCase()}
+      </p>
       <p
-        className={`mt-1 text-2xl font-semibold ${
-          highlight ? "text-amber-700" : "text-slate-900"
-        }`}
+        className={`mt-1.5 font-serif text-[1.75rem] font-bold leading-none tracking-tight ${valueClass}`}
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+// Цвет dtype-сегмента. Совмещён с цветовой схемой DatasetPreview:
+// numeric→info, categorical→success, datetime→warning, bool→neutral.
+function dtypeColor(dtype: string): string {
+  const t = dtype.toLowerCase();
+  if (t.includes("int") || t.includes("float") || t.includes("number")) {
+    return "bg-info-500";
+  }
+  if (t.includes("date") || t.includes("time")) return "bg-warning-500";
+  if (t.includes("bool")) return "bg-paper-500";
+  if (t.includes("object") || t.includes("string") || t.includes("category")) {
+    return "bg-success-500";
+  }
+  return "bg-paper-400";
+}
+
+function DtypeBar({
+  entries,
+  totalCols,
+}: {
+  entries: [string, number][];
+  totalCols: number;
+}) {
+  return (
+    <div>
+      <p className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+        ТИПЫ КОЛОНОК
+      </p>
+      <div className="mt-2 flex h-3 w-full overflow-hidden border border-paper-300">
+        {entries.map(([dtype, count], idx) => (
+          <div
+            key={dtype}
+            className={`${dtypeColor(dtype)} ${idx > 0 ? "border-l border-paper-50" : ""}`}
+            style={{ width: `${(count / totalCols) * 100}%` }}
+            title={`${dtype}: ${count}`}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
+        {entries.map(([dtype, count]) => (
+          <div key={dtype} className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className={`inline-block h-2.5 w-3 ${dtypeColor(dtype)}`}
+            />
+            <span className="font-mono text-xs text-paper-700">{dtype}</span>
+            <span className="font-mono text-xs text-paper-500">{count}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

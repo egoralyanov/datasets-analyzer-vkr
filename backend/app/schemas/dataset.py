@@ -26,3 +26,19 @@ class DatasetResponse(BaseModel):
 
 class DatasetWithPreview(DatasetResponse):
     preview: DatasetPreview
+
+
+class DatasetUsageResponse(BaseModel):
+    """
+    Используется на странице удаления, чтобы показать пользователю, сколько
+    артефактов уйдёт вместе с датасетом (см. .knowledge/architecture/api-contract.md,
+    Спринт 6, Phase 4.2).
+
+    `analyses_count` — все анализы датасета без фильтра по статусу.
+    `reports_count` — только PDF-отчёты в статусе success (failed/pending для UI
+    бесполезны: фронт спрашивает «сколько готовых артефактов потеряет
+    пользователь»).
+    """
+
+    analyses_count: int
+    reports_count: int

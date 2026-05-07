@@ -1,3 +1,35 @@
+/* Шрифтовое семейство IBM Plex (open source, SIL OFL 1.1) — самохостинг */
+/* через @fontsource. Подгружаем 400/500/600/700 у Serif и Sans, 400/500 у   */
+/* Mono. См. frontend/DESIGN_TOKENS.md, раздел 2.                             */
+@import "@fontsource/ibm-plex-serif/400.css";
+@import "@fontsource/ibm-plex-serif/500.css";
+@import "@fontsource/ibm-plex-serif/600.css";
+@import "@fontsource/ibm-plex-serif/700.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-sans/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    background-color: #faf8f4; /* paper.50 — кремовая бумага */
+    color: #4f4a40;             /* paper.600 — основной текст */
+    font-family:
+      "IBM Plex Sans",
+      "Source Sans 3",
+      system-ui,
+      -apple-system,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}

@@ -1,6 +1,10 @@
 // Методы API для работы с датасетами. См. .knowledge/architecture/api-contract.md, раздел 2.
 import { apiClient } from "./client";
-import type { Dataset, DatasetWithPreview } from "../types/dataset";
+import type {
+  Dataset,
+  DatasetUsage,
+  DatasetWithPreview,
+} from "../types/dataset";
 
 export const datasetsApi = {
   async upload(
@@ -35,5 +39,11 @@ export const datasetsApi = {
   },
   async remove(id: string): Promise<void> {
     await apiClient.delete(`/datasets/${id}`);
+  },
+  // Счётчики артефактов датасета: число анализов + число success-отчётов.
+  // Используется в confirm-диалоге удаления (Спринт 6, Phase 4.2).
+  async getUsage(id: string): Promise<DatasetUsage> {
+    const res = await apiClient.get<DatasetUsage>(`/datasets/${id}/usage`);
+    return res.data;
   },
 };

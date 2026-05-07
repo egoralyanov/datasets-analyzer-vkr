@@ -31,6 +31,12 @@ export const analysesApi = {
     const res = await apiClient.get<AnalysisResult>(`/analyses/${id}/result`);
     return res.data;
   },
+  // 204 — успех; 409 — пока идёт профайлинг или обучение baseline
+  // (см. backend/app/api/analyses.py, delete_analysis). Различение текстов
+  // delete-detail остаётся на фронте (DeleteAnalysisModal).
+  async remove(id: string): Promise<void> {
+    await apiClient.delete(`/analyses/${id}`);
+  },
   // Пагинированный список для страницы /history. Контракт: {items, total,
   // page, size, pages}. Дефолты бэка: page=1, size=20, status=null.
   async list(

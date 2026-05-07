@@ -61,3 +61,10 @@ include = ["app*", "seeds*"]
 # /app в sys.path — чтобы тесты могли импортировать `ml.*` (каталог backend/ml/
 # не пакетируется в site-packages, но виден как локальный модуль из cwd).
 pythonpath = ["."]
+# По умолчанию пропускаем тесты с маркером `migration` — они переключают
+# схему БД через alembic и могут влиять на состояние остальных тестов.
+# Запуск отдельным таргетом: make test-migrations.
+addopts = "-m 'not migration'"
+markers = [
+    "migration: тесты, переключающие схему через alembic; не запускаются по умолчанию (см. make test-migrations)",
+]

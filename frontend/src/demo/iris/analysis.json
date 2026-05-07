@@ -1,0 +1,9 @@
+{
+  "id": "demo-iris-analysis",
+  "dataset_id": "demo-iris-dataset",
+  "status": "done",
+  "target_column": "species",
+  "started_at": "2026-05-07T12:00:00",
+  "finished_at": "2026-05-07T12:00:00",
+  "error_message": null
+}

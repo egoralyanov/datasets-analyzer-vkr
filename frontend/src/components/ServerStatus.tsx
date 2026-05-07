@@ -1,8 +1,13 @@
+// Индикатор связи фронта с бэкендом. Опрашивает /api/health через React Query
+// каждые 30 секунд.
+//
+// Стиль (Sprint 5, Phase 3.2): негативный индикатор. В нормальном состоянии
+// (сервер отвечает или идёт первая проверка) ничего не показываем — UI и так
+// ведёт себя корректно. Плашка появляется ТОЛЬКО при потере связи: приглушённая
+// critical-плашка в архивном стиле, фиксирована в правом нижнем углу.
 import { useQuery } from "@tanstack/react-query";
 import { getHealth } from "../api/health";
 
-// Индикатор связи фронта с бэкендом. Опрашивает /api/health через React Query
-// каждые 30 секунд; зелёная точка — сервер отвечает, красная — нет, серая — идёт первая проверка.
 export function ServerStatus() {
   const { data, isError, isPending } = useQuery({
     queryKey: ["health"],
@@ -11,28 +16,18 @@ export function ServerStatus() {
     retry: 1,
   });
 
-  if (isPending) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse" />
-        Проверка соединения…
-      </div>
-    );
-  }
-
-  if (isError || data?.status !== "ok") {
-    return (
-      <div className="flex items-center gap-2 text-sm text-red-600">
-        <span className="h-2 w-2 rounded-full bg-red-500" />
-        Сервер не отвечает
-      </div>
-    );
-  }
+  // Pending первой проверки и нормальная связь — не показываем ничего.
+  if (isPending) return null;
+  if (!isError && data?.status === "ok") return null;
 
   return (
-    <div className="flex items-center gap-2 text-sm text-green-700">
-      <span className="h-2 w-2 rounded-full bg-green-500" />
-      Сервер на связи
+    <div className="border-l-[3px] border-critical-500 bg-paper-50 px-4 py-2 shadow-overlay">
+      <p className="font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-critical-700">
+        ⚠ СВЯЗЬ С СЕРВЕРОМ ПОТЕРЯНА
+      </p>
+      <p className="mt-1 font-serif text-xs leading-relaxed text-paper-600">
+        Проверьте, что бэкенд запущен.
+      </p>
     </div>
   );
 }
