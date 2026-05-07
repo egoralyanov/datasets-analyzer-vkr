@@ -11,11 +11,14 @@ import { datasetsApi } from "../api/datasets";
 import { analysesApi } from "../api/analyses";
 import type { Dataset, DatasetWithPreview } from "../types/dataset";
 import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
+import { PLURAL_FORMS, pluralize } from "../lib/pluralize";
 import { FileDropZone } from "../components/upload/FileDropZone";
 import { DatasetPreview } from "../components/upload/DatasetPreview";
 import { StartAnalysisModal } from "../components/upload/StartAnalysisModal";
+import { DeleteDatasetModal } from "../components/upload/DeleteDatasetModal";
 
 type Toast = { kind: "success" | "error"; text: string } | null;
+type DeleteTarget = { id: string; filename: string };
 
 export function Upload() {
   const queryClient = useQueryClient();
@@ -27,6 +30,10 @@ export function Upload() {
   const [toast, setToast] = useState<Toast>(null);
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  // Sprint 6, Phase 5.1: window.confirm заменён на DeleteDatasetModal с
+  // загрузкой usage (analyses+reports counts). Open state — целевая запись
+  // или null когда модалка закрыта.
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   // Авто-скрытие тоста через 3 секунды.
   useEffect(() => {
@@ -66,21 +73,13 @@ export function Upload() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => datasetsApi.remove(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["datasets"] });
-      if (current?.id === id) setCurrent(null);
-      setToast({ kind: "success", text: "Датасет удалён." });
-    },
-    onError: () => {
-      setToast({ kind: "error", text: "Не удалось удалить датасет." });
-    },
-  });
-
-  const onDelete = (id: string, name: string) => {
-    if (!window.confirm(`Удалить датасет «${name}»?`)) return;
-    deleteMutation.mutate(id);
+  // deleteMutation вынесен в DeleteDatasetModal. Тут только хук-callback,
+  // чтобы при удалении активного датасета закрыть его превью.
+  const onDeleteRequest = (id: string, name: string) => {
+    setDeleteTarget({ id, filename: name });
+  };
+  const onDeleted = (id: string) => {
+    if (current?.id === id) setCurrent(null);
   };
 
   const startAnalysisMutation = useMutation({
@@ -138,7 +137,9 @@ export function Upload() {
             <SectionHeader number={2} title="Превью датасета" />
             <DatasetPreview
               data={current}
-              onDelete={() => onDelete(current.id, current.original_filename)}
+              onDelete={() =>
+                onDeleteRequest(current.id, current.original_filename)
+              }
               onAnalyze={() => {
                 setAnalyzeError(null);
                 setAnalyzeOpen(true);
@@ -157,17 +158,23 @@ export function Upload() {
         onSubmit={(params) => startAnalysisMutation.mutate(params)}
       />
 
+      <DeleteDatasetModal
+        open={deleteTarget !== null}
+        datasetId={deleteTarget?.id ?? null}
+        filename={deleteTarget?.filename ?? null}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={onDeleted}
+      />
+
       <section className="mt-12">
         <SectionHeader
           number={current ? 3 : 2}
           title="Мои датасеты"
           note={
             listQuery.data
-              ? `${listQuery.data.length} ${pluralizeRu(
+              ? `${listQuery.data.length} ${pluralize(
                   listQuery.data.length,
-                  "запись",
-                  "записи",
-                  "записей",
+                  PLURAL_FORMS.record,
                 )}`
               : undefined
           }
@@ -193,10 +200,10 @@ export function Upload() {
                   openMutation.isPending && openMutation.variables === d.id
                 }
                 isDeleting={
-                  deleteMutation.isPending && deleteMutation.variables === d.id
+                  deleteTarget !== null && deleteTarget.id === d.id
                 }
                 onOpen={() => openMutation.mutate(d.id)}
-                onDelete={() => onDelete(d.id, d.original_filename)}
+                onDelete={() => onDeleteRequest(d.id, d.original_filename)}
               />
             ))}
           </ol>
@@ -304,20 +311,6 @@ function DatasetRow({
       </div>
     </li>
   );
-}
-
-// Простая русская плюрализация (1 запись / 2 записи / 5 записей).
-function pluralizeRu(
-  n: number,
-  one: string,
-  few: string,
-  many: string,
-): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
 }
 
 function extractAnalysisError(err: unknown): string {

@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Header } from "./components/layout/Header";
 import { ServerStatus } from "./components/ServerStatus";
+import { Toaster } from "./components/ui/Toaster";
 import { RequireAuth } from "./components/layout/RequireAuth";
 import { RequireAdmin } from "./components/layout/RequireAdmin";
 import { Landing } from "./pages/Landing";
@@ -70,6 +71,7 @@ export default function App() {
         <div className="fixed bottom-4 right-4">
           <ServerStatus />
         </div>
+        <Toaster />
       </div>
     </BrowserRouter>
   );

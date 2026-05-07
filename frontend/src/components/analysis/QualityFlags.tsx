@@ -17,7 +17,7 @@
 // См. frontend/DESIGN_TOKENS.md, раздел 8.2 + принцип «границы вместо
 // заливок».
 import { useState } from "react";
-import { pluralize } from "../../lib/pluralize";
+import { PLURAL_FORMS, pluralize } from "../../lib/pluralize";
 import type { QualityFlag, Severity } from "../../types/analysis";
 
 type Props = {
@@ -71,29 +71,20 @@ const LONG_VALUE_THRESHOLD = 80;
 
 // Лейблы для разрядов summary-строки. Critical и warning склоняются
 // (1 → ед.ч., 2-4 → мн.ч., 5+ → род.п.), info — короткий неизменяемый
-// бейдж «ИНФО». Это даёт более компактную сводку «1 ПРЕДУПРЕЖДЕНИЕ ·
-// 3 ИНФО» вместо «1 ПРЕДУПРЕЖДЕНИЙ · 3 ИНФОРМАЦИОННЫХ».
+// бейдж «инфо». Это даёт более компактную сводку «1 предупреждение ·
+// 3 инфо» (CSS uppercase делает верхний регистр).
+//
+// Sprint 6, Phase 5.1: формы вытащены в общий PLURAL_FORMS из lib/pluralize.ts —
+// остальные модалки (Phase 5) переиспользуют те же tuples.
 const SUMMARY_LABELS: Record<
   Severity,
-  | { kind: "plural"; forms: readonly [string, string, string] }
+  | { kind: "plural"; forms: typeof PLURAL_FORMS.critical }
   | { kind: "fixed"; label: string }
 > = {
-  critical: {
-    kind: "plural",
-    forms: ["КРИТИЧНОЕ", "КРИТИЧНЫХ", "КРИТИЧНЫХ"] as const,
-  },
-  warning: {
-    kind: "plural",
-    forms: ["ПРЕДУПРЕЖДЕНИЕ", "ПРЕДУПРЕЖДЕНИЯ", "ПРЕДУПРЕЖДЕНИЙ"] as const,
-  },
-  info: { kind: "fixed", label: "ИНФО" },
+  critical: { kind: "plural", forms: PLURAL_FORMS.critical },
+  warning: { kind: "plural", forms: PLURAL_FORMS.warning },
+  info: { kind: "fixed", label: "инфо" },
 };
-
-const TOTAL_FORMS: readonly [string, string, string] = [
-  "ЗАМЕЧАНИЕ",
-  "ЗАМЕЧАНИЯ",
-  "ЗАМЕЧАНИЙ",
-] as const;
 
 export function QualityFlags({ flags }: Props) {
   if (flags.length === 0) {
@@ -182,7 +173,7 @@ function SummaryStrip({
     );
   }
 
-  const totalLabel = pluralize(totalCount, TOTAL_FORMS);
+  const totalLabel = pluralize(totalCount, PLURAL_FORMS.remark);
 
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-y border-paper-300 px-3 py-2 font-sans text-xs uppercase tracking-wider">
