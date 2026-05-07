@@ -124,6 +124,46 @@ def delete_user(db: Session, user: User) -> None:
     db.commit()
 
 
+def compute_user_aggregates(db: Session, user_id) -> tuple[int, int, int]:
+    """
+    Возвращает `(datasets_count, analyses_count, reports_count)` для одного
+    пользователя. Используется в GET /api/admin/users/{id} (Спринт 6,
+    Phase 4.5) — детальная карточка в модалке админ-панели.
+
+    `reports_count` фильтрует по `status='success'` — та же семантика,
+    что в /api/datasets/{id}/usage. Связь Report→User денормализована
+    (есть Report.user_id), JOIN с analyses не требуется.
+    """
+    datasets_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Dataset)
+            .where(Dataset.user_id == user_id)
+        )
+        or 0
+    )
+    analyses_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Analysis)
+            .where(Analysis.user_id == user_id)
+        )
+        or 0
+    )
+    reports_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Report)
+            .where(
+                Report.user_id == user_id,
+                Report.status == "success",
+            )
+        )
+        or 0
+    )
+    return datasets_count, analyses_count, reports_count
+
+
 def list_users_paginated(
     db: Session, *, page: int, size: int
 ) -> tuple[list[tuple[User, int, int]], int]:

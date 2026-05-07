@@ -4,6 +4,7 @@ API-эндпоинты админ-панели.
 Контракт:
 - GET    /api/admin/stats             → 200 + AdminStats
 - GET    /api/admin/users?page=&size= → 200 + AdminUserListResponse
+- GET    /api/admin/users/{id}        → 200 + AdminUserDetail (Спринт 6, Phase 4.5)
 - DELETE /api/admin/users/{id}        → 204 (Спринт 6, Phase 4.4)
 
 Все эндпоинты под `Depends(get_current_admin)` — non-admin пользователи
@@ -27,6 +28,7 @@ from app.models.user import User
 from app.repositories import admin_repo, user_repo
 from app.schemas.admin import (
     AdminStats,
+    AdminUserDetail,
     AdminUserListItem,
     AdminUserListResponse,
 )
@@ -79,6 +81,42 @@ def list_admin_users(
         page=page,
         size=size,
         pages=pages,
+    )
+
+
+@router.get("/admin/users/{user_id}", response_model=AdminUserDetail)
+def get_admin_user_detail(
+    user_id: uuid.UUID,
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> AdminUserDetail:
+    """
+    Детали одного пользователя для модалки в админ-панели (Спринт 6,
+    Phase 4.5). Включает агрегаты по датасетам, анализам и
+    success-отчётам.
+
+    Доступ: только role=admin (через `get_current_admin`). Не-admin →
+    403, без auth → 401, несуществующий user_id → 404.
+    """
+    target = user_repo.get_user_by_id(db, user_id)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден",
+        )
+
+    datasets_count, analyses_count, reports_count = (
+        admin_repo.compute_user_aggregates(db, target.id)
+    )
+    return AdminUserDetail(
+        id=target.id,
+        email=target.email,
+        username=target.username,
+        role=target.role,
+        created_at=target.created_at,
+        datasets_count=datasets_count,
+        analyses_count=analyses_count,
+        reports_count=reports_count,
     )
 
 
