@@ -14,6 +14,7 @@ import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
 import { PLURAL_FORMS, pluralize } from "../lib/pluralize";
 import { FileDropZone } from "../components/upload/FileDropZone";
 import { DatasetPreview } from "../components/upload/DatasetPreview";
+import { DuplicateDatasetNotice } from "../components/upload/DuplicateDatasetNotice";
 import { StartAnalysisModal } from "../components/upload/StartAnalysisModal";
 import { DeleteDatasetModal } from "../components/upload/DeleteDatasetModal";
 
@@ -34,6 +35,15 @@ export function Upload() {
   // загрузкой usage (analyses+reports counts). Open state — целевая запись
   // или null когда модалка закрыта.
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  // Sprint 6, Phase 5.3: 409 на upload (тот же file_hash) → показываем
+  // inline-блок с предложением открыть существующий датасет вместо
+  // banner-toast'а с английским detail. id из ответа existing_dataset_id.
+  const [duplicateExistingId, setDuplicateExistingId] = useState<string | null>(
+    null,
+  );
+  // Key для FileDropZone: бамп при «ВЫБРАТЬ ДРУГОЙ ФАЙЛ» сбрасывает его
+  // внутренний state (file/error) через ремаунт без подъёма state наружу.
+  const [dropZoneKey, setDropZoneKey] = useState(0);
 
   // Авто-скрытие тоста через 3 секунды.
   useEffect(() => {
@@ -52,12 +62,26 @@ export function Upload() {
     onSuccess: (data) => {
       setCurrent(data);
       setUploadPercent(0);
+      setDuplicateExistingId(null);
       queryClient.invalidateQueries({ queryKey: ["datasets"] });
       setToast({ kind: "success", text: "Датасет успешно загружен." });
       previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     },
     onError: (err) => {
       setUploadPercent(0);
+      const dup = extractDuplicate(err);
+      if (dup) {
+        // 409 + existing_dataset_id — на месте превью покажем
+        // DuplicateDatasetNotice. Старое превью убираем, banner-toast не
+        // зажигаем: notice самодостаточен.
+        setDuplicateExistingId(dup);
+        setCurrent(null);
+        previewRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        return;
+      }
       setToast({ kind: "error", text: extractDatasetError(err) });
     },
   });
@@ -66,12 +90,19 @@ export function Upload() {
     mutationFn: (id: string) => datasetsApi.get(id),
     onSuccess: (data) => {
       setCurrent(data);
+      // Если открывали существующий из notice — закрываем notice.
+      setDuplicateExistingId(null);
       previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     },
     onError: () => {
       setToast({ kind: "error", text: "Не удалось загрузить датасет." });
     },
   });
+
+  const onChooseAnotherFile = () => {
+    setDuplicateExistingId(null);
+    setDropZoneKey((k) => k + 1);
+  };
 
   // deleteMutation вынесен в DeleteDatasetModal. Тут только хук-callback,
   // чтобы при удалении активного датасета закрыть его превью.
@@ -125,6 +156,7 @@ export function Upload() {
       <div className="mt-10">
         <SectionHeader number={1} title="Загрузка нового файла" />
         <FileDropZone
+          key={dropZoneKey}
           onUpload={(file) => uploadMutation.mutate(file)}
           uploading={uploadMutation.isPending}
           uploadPercent={uploadPercent}
@@ -132,7 +164,17 @@ export function Upload() {
       </div>
 
       <div ref={previewRef} className="mt-12">
-        {current && (
+        {duplicateExistingId !== null ? (
+          <>
+            <SectionHeader number={2} title="Превью датасета" />
+            <DuplicateDatasetNotice
+              existingDatasetId={duplicateExistingId}
+              isOpening={openMutation.isPending}
+              onOpenExisting={(id) => openMutation.mutate(id)}
+              onChooseAnother={onChooseAnotherFile}
+            />
+          </>
+        ) : current ? (
           <>
             <SectionHeader number={2} title="Превью датасета" />
             <DatasetPreview
@@ -146,7 +188,7 @@ export function Upload() {
               }}
             />
           </>
-        )}
+        ) : null}
       </div>
 
       <StartAnalysisModal
@@ -322,6 +364,20 @@ function extractAnalysisError(err: unknown): string {
   if (e.response?.status === 404) return "Датасет не найден.";
   if (typeof detail === "string") return detail;
   return "Не удалось запустить анализ. Попробуйте ещё раз.";
+}
+
+// 409 на upload + existing_dataset_id в теле = бэк нашёл идентичный
+// file_hash у того же юзера (Phase 4.1). Возвращаем id, иначе null —
+// тогда вызывающий код упадёт в стандартный banner-toast.
+// Defensive: 409 без поля existing_dataset_id (например, какой-то другой
+// будущий конфликт) → null, не путаем notice с другим типом ошибки.
+function extractDuplicate(err: unknown): string | null {
+  const e = err as {
+    response?: { status?: number; data?: { existing_dataset_id?: unknown } };
+  };
+  if (e.response?.status !== 409) return null;
+  const id = e.response.data?.existing_dataset_id;
+  return typeof id === "string" && id.length > 0 ? id : null;
 }
 
 function extractDatasetError(err: unknown): string {
