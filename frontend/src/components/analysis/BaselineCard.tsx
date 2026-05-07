@@ -1,26 +1,19 @@
 // Baseline: 4 состояния (not_started/running/done/failed) + таблица метрик
 // и список важности признаков.
 //
-// Стиль (Sprint 5, Phase 2): таблица — настоящая <table> с border-collapse и
-// hairline-руллями, без скруглений; кнопки в archive-стиле — paper.50 фон с
-// 1px ink.700-обводкой, на hover инверсия.
+// Sprint 6, Phase 2: компонент стал презентационным — состояние и мутации
+// живут в `useBaselineActions` (hooks/), а карточка получает их через props.
+// На широких экранах метрики и важность признаков идут side-by-side
+// (`lg:grid-cols-[3fr_2fr]`), на узких — стек.
 //
 // См. frontend/DESIGN_TOKENS.md, раздел 8.4.
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { analysesApi } from "../../api/analyses";
-import { useBaselinePolling } from "../../hooks/useBaselinePolling";
-import type {
-  BaselineResponse,
-  BaselineResult,
-  BaselineStatus,
-  MetricValue,
-} from "../../types/analysis";
+import type { BaselineActions } from "../../hooks/useBaselineActions";
+import type { BaselineResult, MetricValue } from "../../types/analysis";
 
 type Props = {
-  analysisId: string;
   taskType: string | undefined;
+  actions: BaselineActions;
 };
 
 const MODEL_LABELS: Record<string, string> = {
@@ -47,57 +40,31 @@ function formatMetric(value: MetricValue): string {
   return `${value.mean.toFixed(3)} ± ${value.std.toFixed(3)}`;
 }
 
-export function BaselineCard({ analysisId, taskType }: Props) {
-  const queryClient = useQueryClient();
-  const polling = useBaselinePolling(analysisId);
-  const [localError, setLocalError] = useState<string | null>(null);
-
-  const startMutation = useMutation({
-    mutationFn: () => analysesApi.startBaseline(analysisId),
-    onMutate: () => setLocalError(null),
-    onSuccess: (resp) => {
-      queryClient.setQueryData<BaselineResponse>(["baseline", analysisId], {
-        baseline_status: resp.baseline_status,
-        baseline: null,
-        baseline_error: null,
-      });
-      queryClient.invalidateQueries({ queryKey: ["baseline", analysisId] });
-    },
-    onError: (err: unknown) => {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ??
-        (err instanceof Error ? err.message : "Не удалось запустить обучение");
-      setLocalError(detail);
-    },
-  });
-
-  const data = polling.data;
-  const status: BaselineStatus = data?.baseline_status ?? "not_started";
+export function BaselineCard({ taskType, actions }: Props) {
+  const { status, result, pollingError, startError, isStarting, start } =
+    actions;
 
   return (
     <div>
-      {localError && <InlineError message={localError} />}
+      {startError && <InlineError message={startError} />}
 
       {status === "not_started" && (
         <NotStartedView
           taskType={taskType}
-          onStart={() => startMutation.mutate()}
-          isStarting={startMutation.isPending}
+          onStart={start}
+          isStarting={isStarting}
         />
       )}
 
       {status === "running" && <RunningView />}
 
-      {status === "done" && data?.baseline && (
-        <DoneView result={data.baseline} />
-      )}
+      {status === "done" && result && <DoneView result={result} />}
 
       {status === "failed" && (
         <FailedView
-          errorMessage={data?.baseline_error}
-          onRetry={() => startMutation.mutate()}
-          isRetrying={startMutation.isPending}
+          errorMessage={pollingError}
+          onRetry={start}
+          isRetrying={isStarting}
         />
       )}
     </div>
@@ -231,96 +198,102 @@ function DoneView({ result }: { result: BaselineResult }) {
         )}
       </dl>
 
-      <div>
-        <SubsectionLabel>Метрики моделей</SubsectionLabel>
-        <div className="mt-2 overflow-x-auto border border-paper-300">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-paper-300 bg-paper-100/60 text-left font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
-                <th className="px-3 py-2 font-medium">Модель</th>
-                {allMetricKeys.map((key) => (
-                  <th key={key} className="px-3 py-2 font-medium">
-                    {METRIC_LABELS[key] ?? key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {result.models.map((model) => (
-                <tr
-                  key={model}
-                  className="border-b border-paper-200 align-top last:border-b-0"
-                >
-                  <td className="px-3 py-2 font-sans text-sm text-paper-800">
-                    {MODEL_LABELS[model] ?? model}
-                  </td>
-                  {allMetricKeys.map((key) => {
-                    const value = result.metrics[model]?.[key];
-                    return (
-                      <td
-                        key={key}
-                        className="px-3 py-2 font-mono text-xs text-paper-700"
-                      >
-                        {value ? formatMetric(value) : "—"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {importanceEntries.length > 0 && (
+      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
         <div>
-          <SubsectionLabel>Важность признаков (топ-{importanceEntries.length})</SubsectionLabel>
+          <SubsectionLabel>Метрики моделей</SubsectionLabel>
           <div className="mt-2 overflow-x-auto border border-paper-300">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-paper-300 bg-paper-100/60 text-left font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
-                  <th className="w-10 px-3 py-2 font-medium text-right">#</th>
-                  <th className="px-3 py-2 font-medium">Признак</th>
-                  <th className="px-3 py-2 font-medium text-right">Важность</th>
-                  <th className="w-1/3 px-3 py-2 font-medium">Шкала</th>
+                  <th className="px-3 py-2 font-medium">Модель</th>
+                  {allMetricKeys.map((key) => (
+                    <th key={key} className="px-3 py-2 font-medium">
+                      {METRIC_LABELS[key] ?? key}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {importanceEntries.map(([name, importance], idx) => {
-                  const widthPct = Math.max(
-                    2,
-                    Math.round((importance / maxImportance) * 100),
-                  );
-                  return (
-                    <tr
-                      key={name}
-                      className="border-b border-paper-200 last:border-b-0"
-                    >
-                      <td className="px-3 py-2 text-right font-mono text-xs text-paper-400">
-                        {String(idx + 1).padStart(2, "0")}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-paper-800">
-                        {name}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-paper-700">
-                        {importance.toFixed(3)}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="h-1.5 bg-paper-200">
-                          <div
-                            className="h-full bg-ink-700"
-                            style={{ width: `${widthPct}%` }}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {result.models.map((model) => (
+                  <tr
+                    key={model}
+                    className="border-b border-paper-200 align-top last:border-b-0"
+                  >
+                    <td className="px-3 py-2 font-sans text-sm text-paper-800">
+                      {MODEL_LABELS[model] ?? model}
+                    </td>
+                    {allMetricKeys.map((key) => {
+                      const value = result.metrics[model]?.[key];
+                      return (
+                        <td
+                          key={key}
+                          className="px-3 py-2 font-mono text-xs text-paper-700"
+                        >
+                          {value ? formatMetric(value) : "—"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
-      )}
+
+        {importanceEntries.length > 0 && (
+          <div>
+            <SubsectionLabel>
+              Важность признаков (топ-{importanceEntries.length})
+            </SubsectionLabel>
+            <div className="mt-2 overflow-x-auto border border-paper-300">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-paper-300 bg-paper-100/60 text-left font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
+                    <th className="w-10 px-3 py-2 text-right font-medium">#</th>
+                    <th className="px-3 py-2 font-medium">Признак</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Важность
+                    </th>
+                    <th className="w-1/3 px-3 py-2 font-medium">Шкала</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importanceEntries.map(([name, importance], idx) => {
+                    const widthPct = Math.max(
+                      2,
+                      Math.round((importance / maxImportance) * 100),
+                    );
+                    return (
+                      <tr
+                        key={name}
+                        className="border-b border-paper-200 last:border-b-0"
+                      >
+                        <td className="px-3 py-2 text-right font-mono text-xs text-paper-400">
+                          {String(idx + 1).padStart(2, "0")}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-paper-800">
+                          {name}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-paper-700">
+                          {importance.toFixed(3)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="h-1.5 bg-paper-200">
+                            <div
+                              className="h-full bg-ink-700"
+                              style={{ width: `${widthPct}%` }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
       <p className="font-sans text-xs uppercase tracking-wider text-paper-500">
         ОБУЧЕНО:{" "}
@@ -367,9 +340,6 @@ function InlineError({ message }: { message: string }) {
   );
 }
 
-// Архивная кнопка — paper.50 фон + 1px ink.700 обводка, hover инвертирует.
-// Используется в нескольких analysis-компонентах; локальная (не экспортируем
-// общий UI-примитив до Phase 3 — пилот не делает раскат шире страницы).
 function ArchiveButton({
   children,
   onClick,

@@ -1,10 +1,16 @@
 // Страница результата анализа.
 //
-// Стиль (Sprint 5, Phase 2): макет научной статьи — «specimen header» сверху
-// с метаданными в формате definition-list, ниже — пронумерованные §-секции
-// (§1 ПРОФАЙЛ, §2 КАЧЕСТВО, ...) с серифным заголовком и hairline-руллёй.
-// Контейнер 1100px (узкий «журнальный» column-width).
-// См. frontend/DESIGN_TOKENS.md, разделы 3 и 8.4.
+// Sprint 6, Phase 2: убрана линейная «простыня» — макет ближе к dashboard
+// научной публикации. Сводка сжата до 5-карточечной строки + dtype-bar
+// (§1). Качество и Рекомендация — две колонки на ≥1280px (§2). Распределения
+// в 2x2 (§3). Похожие — компактный каталог (§4). Базовая модель + важность
+// признаков рядом (§5). PDF-отчёт — отдельная секция (§6) и shortcut в
+// sticky-bar / inline-bar в зависимости от viewport.
+//
+// State для baseline и report лифтнут наверх через `useBaselineActions` и
+// `useReportActions` — sticky-bar и карточки делят один статус.
+//
+// См. frontend/DESIGN_TOKENS.md, разделы 3 и 8.4 + plans/06-...md, Phase 2.
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +18,8 @@ import { Loader2 } from "lucide-react";
 import { analysesApi } from "../api/analyses";
 import { datasetsApi } from "../api/datasets";
 import { useAnalysisPolling } from "../hooks/useAnalysisPolling";
+import { useBaselineActions } from "../hooks/useBaselineActions";
+import { useReportActions } from "../hooks/useReportActions";
 import { DatasetSummary } from "../components/analysis/DatasetSummary";
 import { QualityFlags } from "../components/analysis/QualityFlags";
 import { Distributions } from "../components/analysis/Distributions";
@@ -19,6 +27,10 @@ import { TaskRecommendationCard } from "../components/analysis/TaskRecommendatio
 import { SimilarDatasetsCard } from "../components/analysis/SimilarDatasetsCard";
 import { BaselineCard } from "../components/analysis/BaselineCard";
 import { ReportDownloadCard } from "../components/analysis/ReportDownloadCard";
+import {
+  InlineActionBar,
+  StickyActionBar,
+} from "../components/analysis/StickyActionBar";
 
 export function AnalysisResult() {
   const { id } = useParams<{ id: string }>();
@@ -35,12 +47,17 @@ export function AnalysisResult() {
     enabled: !!id && analysis?.status === "done",
   });
 
-  // Имя файла нужно для DatasetSummary — берём через GET /datasets/{id}.
+  // Имя файла нужно для shapки страницы и sticky-bar.
   const dataset = useQuery({
     queryKey: ["dataset", analysis?.dataset_id],
     queryFn: () => datasetsApi.get(analysis!.dataset_id),
     enabled: !!analysis?.dataset_id,
   });
+
+  // Lifted state: baseline / report. Хуки безопасно работают с undefined id —
+  // polling guard'ится через `enabled`, mutation проверяет id перед вызовом.
+  const baselineActions = useBaselineActions(id);
+  const reportActions = useReportActions(id);
 
   // Скролл вверх при смене анализа.
   useEffect(() => {
@@ -60,108 +77,126 @@ export function AnalysisResult() {
   const finishedAt = analysis.finished_at
     ? new Date(analysis.finished_at).toLocaleString("ru-RU")
     : null;
+  const filename = dataset.data?.original_filename ?? "Анализ";
+  const showSticky = analysis.status === "done" && !!result.data;
 
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-12 lg:px-16">
-      <button
-        type="button"
-        onClick={() => navigate("/upload")}
-        className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500 underline-offset-2 hover:text-ink-700 hover:underline"
-      >
-        ← НАЗАД К ДАТАСЕТАМ
-      </button>
+    <>
+      {/* pb-24 — отступ под высоту sticky-bar, чтобы он не перекрывал контент. */}
+      <div className="mx-auto max-w-[1200px] px-8 py-12 lg:px-16 lg:pb-24">
+        <button
+          type="button"
+          onClick={() => navigate("/upload")}
+          className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500 underline-offset-2 hover:text-ink-700 hover:underline"
+        >
+          ← НАЗАД К ДАТАСЕТАМ
+        </button>
 
-      <div className="mt-6">
-        <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
-          ОТЧЁТ ОБ АНАЛИЗЕ ДАТАСЕТА
-        </p>
-        <h1 className="mt-2 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
-          {dataset.data?.original_filename ?? "Анализ"}
-        </h1>
-        <dl className="mt-5 grid grid-cols-1 gap-x-8 gap-y-1 border-y border-paper-300 py-3 sm:grid-cols-[10rem_1fr_10rem_1fr]">
-          <SpecimenField label="ID анализа" value={analysis.id} mono />
-          <SpecimenField
-            label="Статус"
-            value={analysis.status.toUpperCase()}
-            mono
-          />
-          {finishedAt && (
-            <SpecimenField label="Завершён" value={finishedAt} mono />
-          )}
-          {analysis.target_column && (
+        <div className="mt-6">
+          <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
+            ОТЧЁТ ОБ АНАЛИЗЕ ДАТАСЕТА
+          </p>
+          <h1 className="mt-2 font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900">
+            {filename}
+          </h1>
+          <dl className="mt-5 grid grid-cols-1 gap-x-8 gap-y-1 border-y border-paper-300 py-3 sm:grid-cols-[10rem_1fr_10rem_1fr]">
+            <SpecimenField label="ID анализа" value={analysis.id} mono />
             <SpecimenField
-              label="Target"
-              value={`«${analysis.target_column}»`}
+              label="Статус"
+              value={analysis.status.toUpperCase()}
               mono
             />
-          )}
-        </dl>
+            {finishedAt && (
+              <SpecimenField label="Завершён" value={finishedAt} mono />
+            )}
+            {analysis.target_column && (
+              <SpecimenField
+                label="Target"
+                value={`«${analysis.target_column}»`}
+                mono
+              />
+            )}
+          </dl>
+        </div>
+
+        {(analysis.status === "pending" || analysis.status === "running") && (
+          <RunningView />
+        )}
+
+        {analysis.status === "failed" && (
+          <FailedView errorMessage={analysis.error_message} />
+        )}
+
+        {analysis.status === "done" && result.data && (
+          <div className="mt-10 space-y-12">
+            <Section number={1} title="Сводка датасета">
+              <DatasetSummary meta={result.data.meta_features} />
+            </Section>
+
+            <div className="grid gap-10 xl:grid-cols-2 xl:gap-8">
+              <Section
+                number={2}
+                title="Качество данных"
+                note={
+                  result.data.flags.length > 0
+                    ? `${result.data.flags.length} замечаний`
+                    : "без замечаний"
+                }
+              >
+                <QualityFlags flags={result.data.flags} />
+              </Section>
+
+              <Section number={3} title="Рекомендация типа задачи">
+                <TaskRecommendationCard
+                  recommendation={result.data.task_recommendation}
+                />
+              </Section>
+            </div>
+
+            <Section number={4} title="Распределения">
+              <Distributions meta={result.data.meta_features} />
+            </Section>
+
+            <Section number={5} title="Похожие датасеты">
+              <SimilarDatasetsCard analysisId={id} />
+            </Section>
+
+            <Section number={6} title="Базовая модель">
+              <BaselineCard
+                taskType={result.data.task_recommendation?.task_type_code}
+                actions={baselineActions}
+              />
+            </Section>
+
+            <Section number={7} title="PDF-отчёт">
+              <ReportDownloadCard
+                analysisStatus={analysis.status}
+                actions={reportActions}
+              />
+            </Section>
+
+            <InlineActionBar
+              analysisStatus={analysis.status}
+              baseline={baselineActions}
+              report={reportActions}
+            />
+          </div>
+        )}
+
+        {analysis.status === "done" && result.isLoading && (
+          <SpinnerBox label="Загрузка результата…" />
+        )}
       </div>
 
-      {(analysis.status === "pending" || analysis.status === "running") && (
-        <RunningView />
+      {showSticky && (
+        <StickyActionBar
+          filename={filename}
+          analysisStatus={analysis.status}
+          baseline={baselineActions}
+          report={reportActions}
+        />
       )}
-
-      {analysis.status === "failed" && (
-        <FailedView errorMessage={analysis.error_message} />
-      )}
-
-      {analysis.status === "done" && result.data && (
-        <div className="mt-10 space-y-12">
-          <Section number={1} title="Профайл данных">
-            <DatasetSummary
-              meta={result.data.meta_features}
-              filename={dataset.data?.original_filename}
-              targetColumn={analysis.target_column}
-            />
-          </Section>
-
-          <Section
-            number={2}
-            title="Качество данных"
-            note={
-              result.data.flags.length > 0
-                ? `${result.data.flags.length} замечаний`
-                : "без замечаний"
-            }
-          >
-            <QualityFlags flags={result.data.flags} />
-          </Section>
-
-          <Section number={3} title="Распределения">
-            <Distributions meta={result.data.meta_features} />
-          </Section>
-
-          <Section number={4} title="Рекомендация типа задачи">
-            <TaskRecommendationCard
-              recommendation={result.data.task_recommendation}
-            />
-          </Section>
-
-          <Section number={5} title="Похожие датасеты">
-            <SimilarDatasetsCard analysisId={id} />
-          </Section>
-
-          <Section number={6} title="Базовая модель">
-            <BaselineCard
-              analysisId={id}
-              taskType={result.data.task_recommendation?.task_type_code}
-            />
-          </Section>
-
-          <Section number={7} title="PDF-отчёт">
-            <ReportDownloadCard
-              analysisId={id}
-              analysisStatus={analysis.status}
-            />
-          </Section>
-        </div>
-      )}
-
-      {analysis.status === "done" && result.isLoading && (
-        <SpinnerBox label="Загрузка результата…" />
-      )}
-    </div>
+    </>
   );
 }
 
@@ -261,7 +296,7 @@ function FailedView({ errorMessage }: { errorMessage: string | null }) {
 
 function SpinnerBox({ label }: { label: string }) {
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-16 lg:px-16">
+    <div className="mx-auto max-w-[1200px] px-8 py-16 lg:px-16">
       <div className="flex items-center justify-center gap-3 border border-paper-300 bg-paper-50 p-8 font-sans text-sm text-paper-600">
         <Loader2 className="h-5 w-5 animate-spin text-ink-700" />
         <span>{label}</span>
@@ -272,7 +307,7 @@ function SpinnerBox({ label }: { label: string }) {
 
 function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-16 lg:px-16">
+    <div className="mx-auto max-w-[1200px] px-8 py-16 lg:px-16">
       <div className="border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-3 font-serif text-sm text-paper-700">
         {message}
       </div>

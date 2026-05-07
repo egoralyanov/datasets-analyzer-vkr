@@ -1,103 +1,56 @@
-// Карточка генерации и скачивания PDF-отчёта по анализу. Размещается
-// последней в цепочке AnalysisResult — семантически финальный шаг.
+// Карточка генерации и скачивания PDF-отчёта по анализу.
 //
-// Состояния (local):
-//   idle       — reportId === null, никто ещё не нажимал «Сгенерировать».
-//   generating — reportId !== null, статус ∈ {pending, running}.
-//   ready      — статус === success.
-//   error      — статус === failed.
+// Sprint 6, Phase 2: компонент стал презентационным — состояние и мутации
+// живут в `useReportActions` (hooks/), карточка получает их через props.
+// Это позволяет sticky-bar триггерить генерацию и одновременно карточке
+// отображать статус (один источник истины).
 //
-// Известное ограничение: при перезагрузке страницы компонент стартует в idle
-// даже если у анализа уже есть готовый success-отчёт в БД. Бэк не отдаёт
-// «последний report для analysis_id». 90% сценариев закрываются через 409 +
-// reason="report_in_progress" — берём report_id и подцепляемся к polling.
+// Состояния:
+//   idle       — reportId === null
+//   generating — status ∈ {pending, running}
+//   ready      — status === success
+//   error      — status === failed
 //
-// Стиль (Sprint 5, Phase 2): архивная карточка с hairline-обводкой; кнопки
-// в archive-стиле (paper.50 фон, 1px ink.700 обводка, инверсия на hover).
-// См. frontend/DESIGN_TOKENS.md.
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import type { AxiosError } from "axios";
+// Известное ограничение из Sprint 4: при перезагрузке страницы reportId в
+// useReportActions сбрасывается в null даже если success-отчёт уже есть в БД
+// (нет latest-report endpoint'а). 90% случаев закрываются через 409 +
+// reason="report_in_progress".
 import { Loader2 } from "lucide-react";
-import { reportsApi } from "../../api/reports";
-import { useReportPolling } from "../../hooks/useReportPolling";
-import type { ReportConflictResponse, ReportStatus } from "../../types/report";
+import type { ReportActions } from "../../hooks/useReportActions";
 import type { AnalysisStatus } from "../../types/analysis";
 
 type Props = {
-  analysisId: string;
   analysisStatus: AnalysisStatus;
+  actions: ReportActions;
 };
 
-const ERROR_AUTO_DISMISS_MS = 5000;
-
-export function ReportDownloadCard({ analysisId, analysisStatus }: Props) {
-  const [reportId, setReportId] = useState<string | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
-
-  const polling = useReportPolling(reportId);
-  const status: ReportStatus | null = polling.data?.status ?? null;
-
-  const startMutation = useMutation({
-    mutationFn: () => reportsApi.create(analysisId),
-    onMutate: () => setLocalError(null),
-    onSuccess: (resp) => setReportId(resp.id),
-    onError: (err: unknown) => {
-      const axiosErr = err as AxiosError<ReportConflictResponse>;
-      const conflict = axiosErr.response?.data;
-      if (
-        axiosErr.response?.status === 409 &&
-        conflict?.reason === "report_in_progress" &&
-        conflict.report_id
-      ) {
-        setReportId(conflict.report_id);
-        return;
-      }
-      const message =
-        conflict?.detail ??
-        (err instanceof Error
-          ? err.message
-          : "Не удалось запустить генерацию отчёта");
-      setLocalError(message);
-      window.setTimeout(() => setLocalError(null), ERROR_AUTO_DISMISS_MS);
-    },
-  });
-
-  const downloadMutation = useMutation({
-    mutationFn: () => reportsApi.download(reportId!),
-    onSuccess: ({ blob, filename }) => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    },
-    onError: (err: unknown) => {
-      const message =
-        err instanceof Error ? err.message : "Не удалось скачать отчёт";
-      setLocalError(message);
-      window.setTimeout(() => setLocalError(null), ERROR_AUTO_DISMISS_MS);
-    },
-  });
-
-  const startDisabled = analysisStatus !== "done" || startMutation.isPending;
+export function ReportDownloadCard({ analysisStatus, actions }: Props) {
+  const {
+    reportId,
+    status,
+    fileSizeBytes,
+    pollingError,
+    flowError,
+    isStarting,
+    isDownloading,
+    start,
+    download,
+    retry,
+  } = actions;
 
   return (
     <div>
-      {localError && (
+      {flowError && (
         <div className="mb-4 border-l-[3px] border-critical-500 bg-critical-50/70 px-4 py-2 font-sans text-sm text-critical-700">
-          {localError}
+          {flowError}
         </div>
       )}
 
       {reportId === null && (
         <IdleView
-          onStart={() => startMutation.mutate()}
-          disabled={startDisabled}
-          isStarting={startMutation.isPending}
+          onStart={start}
+          disabled={analysisStatus !== "done" || isStarting}
+          isStarting={isStarting}
           analysisStatus={analysisStatus}
         />
       )}
@@ -108,20 +61,17 @@ export function ReportDownloadCard({ analysisId, analysisStatus }: Props) {
 
       {reportId !== null && status === "success" && (
         <ReadyView
-          onDownload={() => downloadMutation.mutate()}
-          isDownloading={downloadMutation.isPending}
-          fileSizeBytes={polling.data?.file_size_bytes ?? null}
+          onDownload={download}
+          isDownloading={isDownloading}
+          fileSizeBytes={fileSizeBytes}
         />
       )}
 
       {reportId !== null && status === "failed" && (
         <FailedView
-          errorMessage={polling.data?.error ?? null}
-          onRetry={() => {
-            setReportId(null);
-            startMutation.mutate();
-          }}
-          isRetrying={startMutation.isPending}
+          errorMessage={pollingError}
+          onRetry={retry}
+          isRetrying={isStarting}
         />
       )}
     </div>

@@ -1,8 +1,12 @@
-// Top-K похожих датасетов из каталога. Архивная подача: каждая строка —
-// «карточка библиотечного каталога» с кодом записи в Mono, hairline-руллями
-// между записями, без скруглений и теней.
+// Top-K похожих датасетов из каталога. Архивная подача — нумерованный
+// каталог библиотечных карточек с hairline-руллями.
 //
-// См. frontend/DESIGN_TOKENS.md, раздел 8.4 + manifesto.
+// Sprint 6, Phase 2: компактный режим — одна-две строки на запись.
+// Заголовок + meta (источник, cosine distance, тип задачи) inline в одной
+// строке, описание сократили до 1 строки (truncate). Кнопка «ОТКРЫТЬ»
+// справа inline, не на отдельной строке. Нумерация и hairline сохранены.
+//
+// См. frontend/DESIGN_TOKENS.md, раздел 8.4.
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { analysesApi } from "../../api/analyses";
@@ -11,20 +15,6 @@ import type { SimilarDataset } from "../../types/analysis";
 type Props = {
   analysisId: string;
 };
-
-const DESCRIPTION_TRIM = 200;
-
-function trimDescription(text: string | null | undefined): {
-  short: string;
-  hasMore: boolean;
-} {
-  if (!text) return { short: "", hasMore: false };
-  if (text.length <= DESCRIPTION_TRIM) return { short: text, hasMore: false };
-  return {
-    short: `${text.slice(0, DESCRIPTION_TRIM).trimEnd()}…`,
-    hasMore: true,
-  };
-}
 
 export function SimilarDatasetsCard({ analysisId }: Props) {
   const query = useQuery({
@@ -78,55 +68,49 @@ function SimilarRow({
   item: SimilarDataset;
   index: number;
 }) {
-  const { short: shortDesc, hasMore } = trimDescription(item.description);
-
   return (
-    <li className="grid grid-cols-[2.5rem_1fr] gap-4 px-1 py-4">
+    <li className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-4 px-1 py-2.5">
       <span className="font-mono text-sm text-paper-400">
         {String(index).padStart(2, "0")}.
       </span>
-      <div>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h3 className="font-serif text-[1.125rem] font-semibold leading-snug text-paper-900">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h3
+            className="truncate font-serif text-[1rem] font-semibold leading-snug text-paper-900"
+            title={item.title}
+          >
             {item.title}
           </h3>
-          <div className="flex items-baseline gap-3 font-mono text-xs text-paper-500">
-            <span className="text-paper-700">{item.source}</span>
-            <span>
-              cos d{" "}
-              <span className="text-paper-800">{item.distance.toFixed(3)}</span>
-            </span>
-          </div>
+          <span className="font-mono text-xs text-paper-700">
+            {item.source}
+          </span>
+          <span className="font-mono text-xs text-paper-500">
+            cos d{" "}
+            <span className="text-paper-800">{item.distance.toFixed(3)}</span>
+          </span>
+          <span className="font-mono text-xs text-paper-500">
+            {item.task_type_code.toLowerCase()}
+          </span>
         </div>
-
-        {shortDesc && (
+        {item.description && (
           <p
-            className="mt-2 font-serif text-sm leading-relaxed text-paper-600"
-            title={hasMore ? item.description ?? undefined : undefined}
+            className="mt-0.5 truncate font-serif text-xs text-paper-500"
+            title={item.description}
           >
-            {shortDesc}
+            {item.description}
           </p>
         )}
-
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 font-sans text-xs text-paper-500">
-          <span className="uppercase tracking-wider">
-            ТИП:{" "}
-            <span className="font-mono normal-case tracking-normal text-paper-700">
-              {item.task_type_code.toLowerCase()}
-            </span>
-          </span>
-          {item.source_url && (
-            <a
-              href={item.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium uppercase tracking-wider text-ink-700 underline-offset-2 hover:underline"
-            >
-              ОТКРЫТЬ ↗
-            </a>
-          )}
-        </div>
       </div>
+      {item.source_url && (
+        <a
+          href={item.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="border-b border-transparent font-sans text-xs font-medium uppercase tracking-wider text-ink-700 hover:border-ink-700"
+        >
+          ОТКРЫТЬ ↗
+        </a>
+      )}
     </li>
   );
 }
