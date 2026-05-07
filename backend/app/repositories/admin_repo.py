@@ -56,6 +56,74 @@ def compute_admin_stats(db: Session) -> dict[str, int | float | None]:
     }
 
 
+def count_admins(db: Session) -> int:
+    """
+    Число пользователей с ролью admin.
+
+    Используется в `DELETE /api/admin/users/{id}` (Спринт 6, Phase 4.4)
+    как defense-in-depth: запрещаем удаление, если удаляемый — admin и
+    в системе он единственный admin. На практике этот кейс закрыт раньше
+    self-check'ом (для отправки DELETE нужен сам admin), но защита
+    полезна на случай будущих CLI-сценариев или второго пути удаления.
+    """
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.role == "admin")
+        )
+        or 0
+    )
+
+
+def get_dataset_storage_paths_for_user(
+    db: Session, user_id
+) -> list[str]:
+    """
+    Абсолютные пути файлов всех датасетов пользователя.
+
+    Снимок собирается ДО `db.delete(user)` — после cascade-удаления
+    записей `datasets` пути было бы негде взять. Используется в
+    DELETE /api/admin/users/{id} для зачистки storage с диска
+    (Спринт 6, Phase 4.4).
+    """
+    rows = db.execute(
+        select(Dataset.storage_path).where(Dataset.user_id == user_id)
+    ).all()
+    return [row[0] for row in rows if row[0]]
+
+
+def get_report_file_paths_for_user(
+    db: Session, user_id
+) -> list[str]:
+    """
+    Относительные пути PDF-файлов всех success-отчётов пользователя.
+
+    `Report.file_path` — относительно `settings.REPORTS_DIR`. Фильтр
+    `status='success' AND file_path IS NOT NULL` по той же причине,
+    что в `analysis_repo.get_report_file_paths_for_analysis`: у
+    failed/pending файла на диске нет.
+    """
+    rows = db.execute(
+        select(Report.file_path).where(
+            Report.user_id == user_id,
+            Report.status == "success",
+            Report.file_path.is_not(None),
+        )
+    ).all()
+    return [row[0] for row in rows if row[0]]
+
+
+def delete_user(db: Session, user: User) -> None:
+    """
+    Удаляет пользователя; FK ondelete=CASCADE по цепочке унесёт
+    datasets → analyses → analysis_results / quality_flags / reports.
+    Файлы на диске удаляет эндпоинт после коммита.
+    """
+    db.delete(user)
+    db.commit()
+
+
 def list_users_paginated(
     db: Session, *, page: int, size: int
 ) -> tuple[list[tuple[User, int, int]], int]:
