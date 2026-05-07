@@ -111,6 +111,31 @@ def count_successful_reports_for_dataset(
     return int(result or 0)
 
 
+def get_report_file_paths_for_dataset(
+    db: Session, dataset_id: uuid.UUID
+) -> list[str]:
+    """
+    Относительные пути PDF-файлов всех success-отчётов всех анализов
+    датасета. Используется в DELETE /api/datasets/{id} (Спринт 6,
+    Phase 4.6) для зачистки orphan-PDF после cascade-удаления.
+
+    Тот же JOIN, что в `count_successful_reports_for_dataset` — обе
+    функции «по датасету», поэтому живут рядом в этом репо. Аналогичная
+    функция для одного анализа — `analysis_repo.get_report_file_paths_for_analysis`,
+    для пользователя — `admin_repo.get_report_file_paths_for_user`.
+    """
+    rows = db.execute(
+        select(Report.file_path)
+        .join(Analysis, Report.analysis_id == Analysis.id)
+        .where(
+            Analysis.dataset_id == dataset_id,
+            Report.status == "success",
+            Report.file_path.is_not(None),
+        )
+    ).all()
+    return [row[0] for row in rows if row[0]]
+
+
 def list_datasets(db: Session, user_id: uuid.UUID) -> list[Dataset]:
     return list(
         db.scalars(
