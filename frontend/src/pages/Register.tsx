@@ -84,7 +84,12 @@ export function Register() {
           </div>
         )}
 
-        <form className="space-y-5" onSubmit={onSubmit}>
+        {/* noValidate отключает HTML5-popup валидации (Chrome всплывал поверх
+            соседнего поля при невалидном email и закрывал USERNAME). Ручная
+            валидация ниже (validateLocal + EMAIL_RE) работает как раньше.
+            required и type="email" оставлены ради autofocus и mobile-keyboard
+            layout — это побочные эффекты атрибутов, не HTML5-валидация. */}
+        <form className="space-y-5" onSubmit={onSubmit} noValidate>
           <Field label="Email" htmlFor="reg-email">
             <ArchiveInput
               id="reg-email"
