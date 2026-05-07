@@ -17,6 +17,7 @@
 // См. frontend/DESIGN_TOKENS.md, раздел 8.2 + принцип «границы вместо
 // заливок».
 import { useState } from "react";
+import { pluralize } from "../../lib/pluralize";
 import type { QualityFlag, Severity } from "../../types/analysis";
 
 type Props = {
@@ -68,14 +69,31 @@ const SEVERITY_PILL_BORDER: Record<Severity, string> = {
 // Порог, за которым context-значение разворачивается в скролл-блок.
 const LONG_VALUE_THRESHOLD = 80;
 
-// Лейблы для разрядов summary-строки. Множественное число согласовано с
-// общим числом замечаний в каждом разряде, потому что сводка идёт сразу
-// после счётчика и говорит «X в категории Y».
-const SUMMARY_LABEL: Record<Severity, string> = {
-  critical: "КРИТИЧНЫХ",
-  warning: "ПРЕДУПРЕЖДЕНИЙ",
-  info: "ИНФОРМАЦИОННЫХ",
+// Лейблы для разрядов summary-строки. Critical и warning склоняются
+// (1 → ед.ч., 2-4 → мн.ч., 5+ → род.п.), info — короткий неизменяемый
+// бейдж «ИНФО». Это даёт более компактную сводку «1 ПРЕДУПРЕЖДЕНИЕ ·
+// 3 ИНФО» вместо «1 ПРЕДУПРЕЖДЕНИЙ · 3 ИНФОРМАЦИОННЫХ».
+const SUMMARY_LABELS: Record<
+  Severity,
+  | { kind: "plural"; forms: readonly [string, string, string] }
+  | { kind: "fixed"; label: string }
+> = {
+  critical: {
+    kind: "plural",
+    forms: ["КРИТИЧНОЕ", "КРИТИЧНЫХ", "КРИТИЧНЫХ"] as const,
+  },
+  warning: {
+    kind: "plural",
+    forms: ["ПРЕДУПРЕЖДЕНИЕ", "ПРЕДУПРЕЖДЕНИЯ", "ПРЕДУПРЕЖДЕНИЙ"] as const,
+  },
+  info: { kind: "fixed", label: "ИНФО" },
 };
+
+const TOTAL_FORMS: readonly [string, string, string] = [
+  "ЗАМЕЧАНИЕ",
+  "ЗАМЕЧАНИЯ",
+  "ЗАМЕЧАНИЙ",
+] as const;
 
 export function QualityFlags({ flags }: Props) {
   if (flags.length === 0) {
@@ -164,7 +182,7 @@ function SummaryStrip({
     );
   }
 
-  const totalLabel = pluralizeReplacements(totalCount);
+  const totalLabel = pluralize(totalCount, TOTAL_FORMS);
 
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-y border-paper-300 px-3 py-2 font-sans text-xs uppercase tracking-wider">
@@ -175,29 +193,21 @@ function SummaryStrip({
         <span className="text-paper-700">{totalLabel}</span>
       </span>
       {SEVERITY_ORDER.map((sev) => (
-        <SummaryItem
-          key={sev}
-          count={totals[sev]}
-          label={SUMMARY_LABEL[sev]}
-          tone={sev}
-        />
+        <SummaryItem key={sev} count={totals[sev]} tone={sev} />
       ))}
     </div>
   );
 }
 
-function SummaryItem({
-  count,
-  label,
-  tone,
-}: {
-  count: number;
-  label: string;
-  tone: Severity;
-}) {
+function SummaryItem({ count, tone }: { count: number; tone: Severity }) {
   // Разрядное «0 КРИТИЧНЫХ» приглушаем до paper-500, чтобы не привлекать
   // лишнего внимания (нет — значит нет). Ненулевые показываем семантическим
   // цветом — это «маркер на полях», не заливка (DESIGN_TOKENS.md, п. 7).
+  // Лейбл выбираем через SUMMARY_LABELS: critical/warning склоняются по
+  // числу, info остаётся неизменяемым «ИНФО».
+  const config = SUMMARY_LABELS[tone];
+  const label =
+    config.kind === "plural" ? pluralize(count, config.forms) : config.label;
   const numberColor = count === 0 ? "text-paper-500" : "text-paper-800";
   const labelColor = count === 0 ? "text-paper-500" : SEVERITY_TEXT[tone];
   return (
@@ -213,17 +223,6 @@ function SummaryItem({
       </span>
     </span>
   );
-}
-
-function pluralizeReplacements(count: number): string {
-  // Русские числительные: 1 замечание / 2-4 замечания / 5+ замечаний.
-  // Учитываем 11-14 как множественное (кроме мод-100 11-14 → «замечаний»).
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  if (mod100 >= 11 && mod100 <= 14) return "ЗАМЕЧАНИЙ";
-  if (mod10 === 1) return "ЗАМЕЧАНИЕ";
-  if (mod10 >= 2 && mod10 <= 4) return "ЗАМЕЧАНИЯ";
-  return "ЗАМЕЧАНИЙ";
 }
 
 function FlagRow({ flag }: { flag: QualityFlag }) {

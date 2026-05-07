@@ -159,15 +159,7 @@ export function AnalysisResult() {
           </Band>
 
           <Band tone="100">
-            <Section
-              number={3}
-              title="Качество данных"
-              note={
-                result.data.flags.length > 0
-                  ? `${result.data.flags.length} замечаний`
-                  : "без замечаний"
-              }
-            >
+            <Section number={3} title="Качество данных">
               <QualityFlags flags={result.data.flags} />
             </Section>
           </Band>
