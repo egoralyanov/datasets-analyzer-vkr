@@ -95,7 +95,7 @@ export function QualityFlags({ flags }: Props) {
         if (list.length === 0) return null;
         return (
           <div key={sev}>
-            <h3 className="mb-3 font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+            <h3 className="mb-2 font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
               <span className={SEVERITY_TEXT[sev]}>{SEVERITY_LABEL[sev]}</span>
               <span className="ml-2 font-mono normal-case tracking-normal text-paper-500">
                 ({list.length})
@@ -114,40 +114,45 @@ export function QualityFlags({ flags }: Props) {
 }
 
 function FlagRow({ flag }: { flag: QualityFlag }) {
+  // Sprint 6, Phase 2.5: всегда стартуем с collapsed-state — пользователь
+  // сам раскрывает то, что интересно. Ряд при этом сжат до 2 строк:
+  // верхняя — pill + code + rule_name + кнопка справа, нижняя — message.
   const [expanded, setExpanded] = useState(false);
   const hasContext = flag.context && Object.keys(flag.context).length > 0;
   const sev = flag.severity;
 
   return (
     <div
-      className={`border-b border-paper-200 last:border-b-0 border-l-[3px] ${SEVERITY_RULE[sev]} ${SEVERITY_TINT[sev]} px-5 py-3`}
+      className={`border-b border-paper-200 last:border-b-0 border-l-[3px] ${SEVERITY_RULE[sev]} ${SEVERITY_TINT[sev]} px-4 py-2`}
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <SeverityPill tone={sev}>{SEVERITY_BADGE[sev]}</SeverityPill>
-        <span className="font-mono text-xs text-paper-700">
-          {flag.rule_code}
-        </span>
-        <span className="font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
-          {flag.rule_name}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <SeverityPill tone={sev}>{SEVERITY_BADGE[sev]}</SeverityPill>
+          <span className="font-mono text-xs text-paper-700">
+            {flag.rule_code}
+          </span>
+          <span className="font-sans text-[0.6875rem] uppercase tracking-wider text-paper-500">
+            {flag.rule_name}
+          </span>
+        </div>
+
+        {hasContext && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="font-sans text-xs font-medium uppercase tracking-wider text-ink-700 underline-offset-2 hover:underline"
+          >
+            {expanded ? "СКРЫТЬ" : "ПОДРОБНЕЕ →"}
+          </button>
+        )}
       </div>
 
-      <p className="mt-2 font-serif text-[0.9375rem] leading-relaxed text-paper-700">
+      <p className="mt-1 font-serif text-[0.9375rem] leading-snug text-paper-700">
         {flag.message}
       </p>
 
-      {hasContext && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-2 font-sans text-xs font-medium uppercase tracking-wider text-ink-700 underline-offset-2 hover:underline"
-        >
-          {expanded ? "СКРЫТЬ ДЕТАЛИ" : "ПОДРОБНЕЕ →"}
-        </button>
-      )}
-
       {expanded && hasContext && (
-        <dl className="mt-3 space-y-1.5 border-t border-paper-200 pt-3">
+        <dl className="mt-2 space-y-1 border-t border-paper-200 pt-2">
           {Object.entries(flag.context!).map(([key, value]) => (
             <ContextEntry key={key} entryKey={key} value={value} />
           ))}
