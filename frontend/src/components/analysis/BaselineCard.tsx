@@ -6,6 +6,15 @@
 // На широких экранах метрики и важность признаков идут side-by-side
 // (`lg:grid-cols-[3fr_2fr]`), на узких — стек.
 //
+// Sprint 6, Phase 3: после таблицы метрик показывается ruled-блок с
+// семантическим вердиктом (success / warning / critical). Берём ЛУЧШУЮ
+// модель (для регрессии — по r2, для классификации — по f1_macro/f1) и
+// классифицируем её качество порогами:
+//   r2:        ≥0.7 success | ≥0.3 success | ≥0 warning | <0 critical
+//   accuracy:  ≥0.9 success | ≥0.7 success | ≥(1/N + 0.1) warning |
+//              около 1/N — critical
+// Это локальная фронт-логика, без изменения backend-контракта.
+//
 // См. frontend/DESIGN_TOKENS.md, раздел 8.4.
 import { Loader2 } from "lucide-react";
 import type { BaselineActions } from "../../hooks/useBaselineActions";
@@ -13,6 +22,8 @@ import type { BaselineResult, MetricValue } from "../../types/analysis";
 
 type Props = {
   taskType: string | undefined;
+  /** Число классов target для классификации (для расчёта random baseline). */
+  nClasses?: number;
   actions: BaselineActions;
 };
 
@@ -40,7 +51,7 @@ function formatMetric(value: MetricValue): string {
   return `${value.mean.toFixed(3)} ± ${value.std.toFixed(3)}`;
 }
 
-export function BaselineCard({ taskType, actions }: Props) {
+export function BaselineCard({ taskType, nClasses, actions }: Props) {
   const { status, result, pollingError, startError, isStarting, start } =
     actions;
 
@@ -58,7 +69,9 @@ export function BaselineCard({ taskType, actions }: Props) {
 
       {status === "running" && <RunningView />}
 
-      {status === "done" && result && <DoneView result={result} />}
+      {status === "done" && result && (
+        <DoneView result={result} taskType={taskType} nClasses={nClasses} />
+      )}
 
       {status === "failed" && (
         <FailedView
@@ -164,7 +177,15 @@ function FailedView({
   );
 }
 
-function DoneView({ result }: { result: BaselineResult }) {
+function DoneView({
+  result,
+  taskType,
+  nClasses,
+}: {
+  result: BaselineResult;
+  taskType: string | undefined;
+  nClasses: number | undefined;
+}) {
   if (result.note && result.models.length === 0) {
     return (
       <div className="border-l-[3px] border-paper-400 bg-paper-100/60 px-4 py-3 font-serif text-sm leading-relaxed text-paper-700">
@@ -295,6 +316,8 @@ function DoneView({ result }: { result: BaselineResult }) {
         )}
       </div>
 
+      <VerdictBlock result={result} taskType={taskType} nClasses={nClasses} />
+
       <p className="font-sans text-xs uppercase tracking-wider text-paper-500">
         ОБУЧЕНО:{" "}
         <span className="font-mono normal-case tracking-normal text-paper-700">
@@ -303,6 +326,195 @@ function DoneView({ result }: { result: BaselineResult }) {
       </p>
     </div>
   );
+}
+
+// =============================================================================
+//                    Семантический вердикт по результатам baseline
+// =============================================================================
+
+type VerdictTone = "success" | "warning" | "critical";
+
+type Verdict = {
+  tone: VerdictTone;
+  text: string;
+};
+
+// Цветовая гамма ruled-блока: hairline-граница в семантическом цвете +
+// текст в *-700 + лёгкий тинт фона *-50/40, без жёсткой заливки (см.
+// DESIGN_TOKENS.md, п.7).
+const VERDICT_STYLES: Record<VerdictTone, string> = {
+  success: "border-success-500 bg-success-50/40 text-success-700",
+  warning: "border-warning-500 bg-warning-50/40 text-warning-700",
+  critical: "border-critical-500 bg-critical-50/40 text-critical-700",
+};
+
+const VERDICT_LABEL: Record<VerdictTone, string> = {
+  success: "ВЕРДИКТ · ХОРОШО",
+  warning: "ВЕРДИКТ · СЛАБО",
+  critical: "ВЕРДИКТ · НЕТ СИГНАЛА",
+};
+
+function VerdictBlock({
+  result,
+  taskType,
+  nClasses,
+}: {
+  result: BaselineResult;
+  taskType: string | undefined;
+  nClasses: number | undefined;
+}) {
+  const verdict = computeVerdict(result, taskType, nClasses);
+  if (verdict === null) return null;
+
+  return (
+    <div
+      className={`border border-l-[3px] px-4 py-3 ${VERDICT_STYLES[verdict.tone]}`}
+    >
+      <p className="font-sans text-xs font-medium uppercase tracking-wider">
+        {VERDICT_LABEL[verdict.tone]}
+      </p>
+      <p className="mt-1 font-serif text-base leading-relaxed">
+        {verdict.text}
+      </p>
+    </div>
+  );
+}
+
+function computeVerdict(
+  result: BaselineResult,
+  taskType: string | undefined,
+  nClasses: number | undefined,
+): Verdict | null {
+  if (result.models.length === 0) return null;
+
+  if (taskType === "REGRESSION") {
+    const r2 = bestMetricMean(result, "r2");
+    if (r2 === null) return null;
+    return regressionVerdict(r2);
+  }
+
+  if (
+    taskType === "BINARY_CLASSIFICATION" ||
+    taskType === "MULTICLASS_CLASSIFICATION"
+  ) {
+    // Классификация: лучшую модель выбираем по f1_macro (multiclass) или
+    // f1 (binary) — что есть; вердикт строится по accuracy этой модели.
+    const rankerKey = taskType === "BINARY_CLASSIFICATION" ? "f1" : "f1_macro";
+    const bestModel = pickBestModel(result, rankerKey);
+    if (bestModel === null) return null;
+    const accuracy = result.metrics[bestModel]?.accuracy?.mean;
+    if (accuracy === undefined || !Number.isFinite(accuracy)) return null;
+    const effectiveClasses =
+      taskType === "BINARY_CLASSIFICATION" ? 2 : nClasses ?? 0;
+    return classificationVerdict(accuracy, effectiveClasses);
+  }
+
+  return null;
+}
+
+// Среди всех моделей берём максимальное среднее по указанной метрике.
+// Используется для регрессии (r2): лучший результат — лучший вердикт.
+function bestMetricMean(
+  result: BaselineResult,
+  metricKey: string,
+): number | null {
+  let best: number | null = null;
+  for (const model of result.models) {
+    const value = result.metrics[model]?.[metricKey]?.mean;
+    if (value === undefined || !Number.isFinite(value)) continue;
+    if (best === null || value > best) best = value;
+  }
+  return best;
+}
+
+// Для классификации сначала отбираем модель по f1, потом смотрим её accuracy:
+// f1 точнее отражает качество при дисбалансе, accuracy — интуитивнее для
+// итогового вердикта.
+function pickBestModel(
+  result: BaselineResult,
+  metricKey: string,
+): string | null {
+  let bestModel: string | null = null;
+  let bestValue = -Infinity;
+  for (const model of result.models) {
+    const value = result.metrics[model]?.[metricKey]?.mean;
+    if (value === undefined || !Number.isFinite(value)) continue;
+    if (value > bestValue) {
+      bestValue = value;
+      bestModel = model;
+    }
+  }
+  return bestModel;
+}
+
+function regressionVerdict(r2: number): Verdict {
+  if (r2 >= 0.7) {
+    return {
+      tone: "success",
+      text:
+        "Модель находит сильный сигнал в данных. Признаки хорошо объясняют целевую переменную.",
+    };
+  }
+  if (r2 >= 0.3) {
+    return {
+      tone: "success",
+      text:
+        "Модель находит умеренный сигнал. Возможна доработка признаков для улучшения качества.",
+    };
+  }
+  if (r2 >= 0) {
+    return {
+      tone: "warning",
+      text:
+        "Сигнал в данных слабый. Признаки слабо объясняют целевую переменную.",
+    };
+  }
+  return {
+    tone: "critical",
+    text:
+      "Модель работает не лучше предсказания среднего. Признаки не несут полезного сигнала для целевой переменной — пересмотрите состав признаков или постановку задачи.",
+  };
+}
+
+function classificationVerdict(accuracy: number, nClasses: number): Verdict {
+  if (accuracy >= 0.9) {
+    return {
+      tone: "success",
+      text: "Модель уверенно различает классы.",
+    };
+  }
+  if (accuracy >= 0.7) {
+    return {
+      tone: "success",
+      text:
+        "Модель различает классы, но есть пространство для улучшения.",
+    };
+  }
+
+  // Ниже 0.7 — сравниваем с базой случайного выбора 1/N. Если N неизвестно
+  // (nClasses == 0) — деградируем к простому порогу 0.5 как для бинарной.
+  const randomBaseline = nClasses > 0 ? 1 / nClasses : 0.5;
+
+  if (Math.abs(accuracy - randomBaseline) < 0.05) {
+    return {
+      tone: "critical",
+      text:
+        "Модель работает на уровне случайного выбора. Признаки не несут полезного сигнала для целевой переменной.",
+    };
+  }
+  if (accuracy >= randomBaseline + 0.1) {
+    return {
+      tone: "warning",
+      text:
+        "Модель обходит случайный выбор, но слабо. Для надёжного прогноза требуется доработка.",
+    };
+  }
+  // Между «около base» и «base+0.1» — тоже warning, но с акцентом на разницу.
+  return {
+    tone: "warning",
+    text:
+      "Модель обходит случайный выбор, но слабо. Для надёжного прогноза требуется доработка.",
+  };
 }
 
 function Field({

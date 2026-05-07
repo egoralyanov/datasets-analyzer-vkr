@@ -37,7 +37,20 @@ import {
   InlineActionBar,
   StickyActionBar,
 } from "../components/analysis/StickyActionBar";
-import type { AnalysisStatus } from "../types/analysis";
+import type { AnalysisStatus, MetaFeatures } from "../types/analysis";
+
+// Сколько классов в target. Берём из target_value_counts (точная карта),
+// иначе из target_n_unique (верхняя оценка профайлера). Возвращаем
+// undefined, если данных нет — для регрессии и кластеризации
+// BaselineCard не использует это значение.
+function extractNClasses(meta: MetaFeatures): number | undefined {
+  const counts = meta.target_value_counts;
+  if (counts && Object.keys(counts).length > 0) {
+    return Object.keys(counts).length;
+  }
+  const raw = meta["target_n_unique"];
+  return typeof raw === "number" && raw > 0 ? raw : undefined;
+}
 
 export function AnalysisResult() {
   const { id } = useParams<{ id: string }>();
@@ -175,6 +188,7 @@ export function AnalysisResult() {
             <Section number={6} title="Базовая модель">
               <BaselineCard
                 taskType={result.data.task_recommendation?.task_type_code}
+                nClasses={extractNClasses(result.data.meta_features)}
                 actions={baselineActions}
               />
             </Section>

@@ -9,6 +9,11 @@
 // окном `max-h-32 overflow-y-auto` (компактно для типичного случая,
 // читабельно для редкого).
 //
+// Sprint 6, Phase 3: над списком замечаний добавлена сводная строка
+// с breakdown'ом по severity (всего · критичных · предупреждений ·
+// информационных) — даёт быструю общую оценку без скролла. В empty-
+// case показывается строка «OK · ПРОБЛЕМ НЕ ОБНАРУЖЕНО».
+//
 // См. frontend/DESIGN_TOKENS.md, раздел 8.2 + принцип «границы вместо
 // заливок».
 import { useState } from "react";
@@ -63,18 +68,33 @@ const SEVERITY_PILL_BORDER: Record<Severity, string> = {
 // Порог, за которым context-значение разворачивается в скролл-блок.
 const LONG_VALUE_THRESHOLD = 80;
 
+// Лейблы для разрядов summary-строки. Множественное число согласовано с
+// общим числом замечаний в каждом разряде, потому что сводка идёт сразу
+// после счётчика и говорит «X в категории Y».
+const SUMMARY_LABEL: Record<Severity, string> = {
+  critical: "КРИТИЧНЫХ",
+  warning: "ПРЕДУПРЕЖДЕНИЙ",
+  info: "ИНФОРМАЦИОННЫХ",
+};
+
 export function QualityFlags({ flags }: Props) {
   if (flags.length === 0) {
     return (
-      <div className="border-l-[3px] border-success-500 bg-paper-50 px-5 py-4">
-        <SeverityPill tone="success">OK</SeverityPill>
-        <p className="mt-2 font-sans text-xs font-medium uppercase tracking-wider text-success-700">
-          ПРОБЛЕМ НЕ ОБНАРУЖЕНО
-        </p>
-        <p className="mt-1 font-serif text-[0.9375rem] text-paper-700">
-          Ни одно из 12 правил качества не сработало. Датасет пригоден к
-          обучению.
-        </p>
+      <div className="space-y-3">
+        <SummaryStrip
+          totals={{ critical: 0, warning: 0, info: 0 }}
+          totalCount={0}
+        />
+        <div className="border-l-[3px] border-success-500 bg-paper-50 px-5 py-4">
+          <SeverityPill tone="success">OK</SeverityPill>
+          <p className="mt-2 font-sans text-xs font-medium uppercase tracking-wider text-success-700">
+            ПРОБЛЕМ НЕ ОБНАРУЖЕНО
+          </p>
+          <p className="mt-1 font-serif text-[0.9375rem] text-paper-700">
+            Ни одно из 12 правил качества не сработало. Датасет пригоден к
+            обучению.
+          </p>
+        </div>
       </div>
     );
   }
@@ -88,8 +108,15 @@ export function QualityFlags({ flags }: Props) {
     grouped[f.severity].push(f);
   }
 
+  const totals = {
+    critical: grouped.critical.length,
+    warning: grouped.warning.length,
+    info: grouped.info.length,
+  };
+
   return (
     <div className="space-y-8">
+      <SummaryStrip totals={totals} totalCount={flags.length} />
       {SEVERITY_ORDER.map((sev) => {
         const list = grouped[sev];
         if (list.length === 0) return null;
@@ -111,6 +138,92 @@ export function QualityFlags({ flags }: Props) {
       })}
     </div>
   );
+}
+
+// Сводная строка над списком замечаний. В non-empty case — счётчик «всего»
+// + breakdown по severity (критичных / предупреждений / информационных).
+// В empty case — успех («OK · ПРОБЛЕМ НЕ ОБНАРУЖЕНО»). Числа в Mono,
+// лейблы Sans uppercase, разделители «·» в paper-500 — выдержано в
+// archive-тоне (см. DESIGN_TOKENS.md, п. 7).
+function SummaryStrip({
+  totals,
+  totalCount,
+}: {
+  totals: Record<Severity, number>;
+  totalCount: number;
+}) {
+  if (totalCount === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-paper-300 px-3 py-2 font-sans text-xs uppercase tracking-wider">
+        <span className="font-mono text-sm normal-case tracking-normal text-success-700">
+          OK
+        </span>
+        <span className="text-paper-500">·</span>
+        <span className="text-success-700">ПРОБЛЕМ НЕ ОБНАРУЖЕНО</span>
+      </div>
+    );
+  }
+
+  const totalLabel = pluralizeReplacements(totalCount);
+
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-y border-paper-300 px-3 py-2 font-sans text-xs uppercase tracking-wider">
+      <span>
+        <span className="font-mono text-sm normal-case tracking-normal text-paper-800">
+          {totalCount}
+        </span>{" "}
+        <span className="text-paper-700">{totalLabel}</span>
+      </span>
+      {SEVERITY_ORDER.map((sev) => (
+        <SummaryItem
+          key={sev}
+          count={totals[sev]}
+          label={SUMMARY_LABEL[sev]}
+          tone={sev}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SummaryItem({
+  count,
+  label,
+  tone,
+}: {
+  count: number;
+  label: string;
+  tone: Severity;
+}) {
+  // Разрядное «0 КРИТИЧНЫХ» приглушаем до paper-500, чтобы не привлекать
+  // лишнего внимания (нет — значит нет). Ненулевые показываем семантическим
+  // цветом — это «маркер на полях», не заливка (DESIGN_TOKENS.md, п. 7).
+  const numberColor = count === 0 ? "text-paper-500" : "text-paper-800";
+  const labelColor = count === 0 ? "text-paper-500" : SEVERITY_TEXT[tone];
+  return (
+    <span className="flex items-baseline gap-x-3">
+      <span className="text-paper-500">·</span>
+      <span>
+        <span
+          className={`font-mono text-sm normal-case tracking-normal ${numberColor}`}
+        >
+          {count}
+        </span>{" "}
+        <span className={labelColor}>{label}</span>
+      </span>
+    </span>
+  );
+}
+
+function pluralizeReplacements(count: number): string {
+  // Русские числительные: 1 замечание / 2-4 замечания / 5+ замечаний.
+  // Учитываем 11-14 как множественное (кроме мод-100 11-14 → «замечаний»).
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) return "ЗАМЕЧАНИЙ";
+  if (mod10 === 1) return "ЗАМЕЧАНИЕ";
+  if (mod10 >= 2 && mod10 <= 4) return "ЗАМЕЧАНИЯ";
+  return "ЗАМЕЧАНИЙ";
 }
 
 function FlagRow({ flag }: { flag: QualityFlag }) {
