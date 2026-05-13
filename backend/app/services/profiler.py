@@ -14,7 +14,8 @@
 Используемые методы и источники:
 - Tukey J.W. "Exploratory Data Analysis", 1977 — IQR-метод обнаружения выбросов.
 - Shapiro S.S., Wilk M.B. "An analysis of variance test for normality", 1965 —
-  тест нормальности.
+  тест нормальности для выборок до 5000 наблюдений.
+- Kolmogorov A.N. (1933), Smirnov N.V. (1948) — тест согласия для больших выборок.
 - Cover T., Thomas J. "Elements of Information Theory", 2006 — Mutual Information.
 - Shannon C.E. "A Mathematical Theory of Communication", 1948 — энтропия.
 
@@ -134,50 +135,61 @@ def count_outliers(values: np.ndarray, is_normal: bool) -> int:
 # =============================================================================
 
 
-def is_normal_shapiro(
+def check_normality(
     values: np.ndarray,
     alpha: float = 0.05,
-    random_state: int = RANDOM_STATE,
-) -> tuple[bool, float | None]:
+) -> tuple[bool, float | None, str | None]:
     """
-    Проверка нормальности распределения тестом Шапиро-Уилка.
+    Проверка нормальности распределения с автоматическим выбором критерия по объёму выборки.
 
     Метод: H0 — выборка извлечена из нормального распределения. Если
     p-value < alpha, гипотеза H0 отвергается → распределение не нормальное.
 
-    Ограничение scipy.stats.shapiro: 3 ≤ n ≤ 5000. Для бóльших выборок
-    документация рекомендует Anderson-Darling test или сэмпл; мы выбираем
-    случайный сэмпл размером SHAPIRO_MAX_N (фиксированный random_state ради
-    воспроизводимости — требование ТЗ). Этот компромисс защитим на ГЭК так:
-    в наших данных «зацепить» нетипичные хвосты при сэмпле в 5000 точек
-    статистически почти невозможно, при этом ускорение колоссальное.
+    Выбор критерия (требование ТЗ, п. 3.2.1):
+    - 3 ≤ n ≤ 5000 — критерий Шапиро-Уилка (scipy.stats.shapiro). Имеет
+      высокую мощность на малых и средних выборках; область применения
+      ограничена scipy 5000 наблюдений.
+    - n > 5000 — критерий согласия Колмогорова-Смирнова (scipy.stats.kstest).
+      Сравнение эмпирической функции распределения с нормальной
+      N(μ̂, σ̂²), параметры μ̂ и σ̂ оцениваются по самой выборке.
+      Уровень значимости — 0.05 (ТЗ).
 
-    Источник: Shapiro S.S., Wilk M.B. "An analysis of variance test for
-    normality (complete samples)", Biometrika, 1965.
-    См. .knowledge/methods/profiling.md, раздел 2.1.
+    Источники:
+    - Shapiro S.S., Wilk M.B. "An analysis of variance test for normality
+      (complete samples)", Biometrika, 1965.
+    - Колмогоров А.Н. "Sulla determinazione empirica di una legge di
+      distribuzione", 1933; Смирнов Н.В. "Table for estimating the goodness
+      of fit of empirical distributions", 1948.
+
+    См. .knowledge/methods/profiling.md, разделы 2.1 и 2.2.
 
     Args:
         values: одномерный массив числовых значений (без NaN).
         alpha: уровень значимости, по умолчанию 0.05.
-        random_state: seed для воспроизводимого сэмпла при n > SHAPIRO_MAX_N.
 
     Returns:
-        Кортеж (is_normal, p_value). При n < 3 возвращается (False, None) —
-        тест не применим, выбросы будем считать через IQR.
+        Кортеж (is_normal, p_value, method), где method ∈ {"shapiro", "ks", None}.
+        При n < 3 или нулевой дисперсии возвращается (False, None, None) —
+        тест неприменим, выбросы будем считать через IQR.
     """
     if values.size < 3:
-        return False, None
+        return False, None, None
     # На константе тест неприменим (range zero) — scipy печатает warning,
     # а математический смысл нормальности отсутствует. Сразу не нормально.
     if values.std(ddof=0) == 0:
-        return False, None
-    # Для больших выборок берём случайный сэмпл фиксированного размера —
-    # сам тест Шапиро-Уилка определён только до n=5000.
-    if values.size > SHAPIRO_MAX_N:
-        rng = np.random.default_rng(random_state)
-        values = rng.choice(values, size=SHAPIRO_MAX_N, replace=False)
-    statistic, p_value = stats.shapiro(values)
-    return bool(p_value > alpha), float(p_value)
+        return False, None, None
+    if values.size <= SHAPIRO_MAX_N:
+        # Шапиро-Уилк — высокая мощность для малых и средних выборок.
+        _, p_value = stats.shapiro(values)
+        return bool(p_value > alpha), float(p_value), "shapiro"
+    # Колмогоров-Смирнов на полной выборке. Параметры (μ, σ) нормального
+    # распределения оцениваются по самой выборке: ddof=0 — population-оценка,
+    # согласована с detect_outliers_zscore. Для n > 5000 разница с ddof=1
+    # статистически пренебрежима.
+    mean = float(values.mean())
+    std = float(values.std(ddof=0))
+    _, p_value = stats.kstest(values, "norm", args=(mean, std))
+    return bool(p_value > alpha), float(p_value), "ks"
 
 
 def compute_skewness(values: np.ndarray) -> float | None:
@@ -441,13 +453,19 @@ def compute_numeric_features(df: pd.DataFrame, numeric_cols: list[str]) -> dict[
     Meta-features по числовым колонкам.
 
     Для каждой числовой колонки считаем: skewness, kurtosis, факт нормальности
-    (Шапиро-Уилк), долю выбросов (Z-score / IQR в зависимости от нормальности).
+    (Шапиро-Уилк для n ≤ 5000, Колмогоров-Смирнов для n > 5000), долю выбросов
+    (Z-score / IQR в зависимости от нормальности).
 
     Агрегаты по всем числовым колонкам:
     - mean_skewness, mean_kurtosis — средние моменты (используются как
       признаки для мета-классификатора в Спринте 3).
     - normality_test_pvalue — медиана p-value, агрегат «насколько типично
       данные похожи на нормальные».
+    - normality_test_method — применённый критерий ("shapiro" | "ks" |
+      "mixed" | None). "mixed" возвращается, если по разным колонкам
+      применялись оба критерия (например, часть колонок имела ≤ 5000
+      непропущенных значений, часть — больше). None — если ни одна
+      колонка не дала валидного результата теста.
     - outliers_pct — суммарная доля выбросов по всем числовым колонкам.
 
     Дополнительно: per-column outliers и low_variance_cols — для UI и
@@ -456,6 +474,7 @@ def compute_numeric_features(df: pd.DataFrame, numeric_cols: list[str]) -> dict[
     skewness_values: list[float] = []
     kurtosis_values: list[float] = []
     pvalues: list[float] = []
+    methods_used: set[str] = set()
     outliers_by_column: dict[str, float] = {}
     low_variance_cols: list[str] = []
     total_outliers = 0
@@ -475,9 +494,11 @@ def compute_numeric_features(df: pd.DataFrame, numeric_cols: list[str]) -> dict[
         if kurt is not None:
             kurtosis_values.append(kurt)
 
-        is_normal, p_value = is_normal_shapiro(clean)
+        is_normal, p_value, method = check_normality(clean)
         if p_value is not None:
             pvalues.append(p_value)
+        if method is not None:
+            methods_used.add(method)
 
         outliers = count_outliers(clean, is_normal)
         outliers_by_column[col] = float(outliers / clean.size)
@@ -493,10 +514,18 @@ def compute_numeric_features(df: pd.DataFrame, numeric_cols: list[str]) -> dict[
         elif mean > 0 and std / mean < 0.01:
             low_variance_cols.append(col)
 
+    if not methods_used:
+        method_label: str | None = None
+    elif len(methods_used) == 1:
+        method_label = next(iter(methods_used))
+    else:
+        method_label = "mixed"
+
     return {
         "mean_skewness": float(np.mean(skewness_values)) if skewness_values else None,
         "mean_kurtosis": float(np.mean(kurtosis_values)) if kurtosis_values else None,
         "normality_test_pvalue": float(np.median(pvalues)) if pvalues else None,
+        "normality_test_method": method_label,
         "outliers_pct": float(total_outliers / total_values) if total_values else 0.0,
         "outliers_by_column": outliers_by_column,
         "low_variance_numeric_cols": low_variance_cols,

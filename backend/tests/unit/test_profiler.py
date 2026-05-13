@@ -15,6 +15,8 @@ import pytest
 from app.services.profiler import (
     SAMPLE_SIZE,
     SAMPLING_THRESHOLD,
+    SHAPIRO_MAX_N,
+    check_normality,
     compute_entropy,
     compute_kurtosis,
     compute_meta_features,
@@ -22,7 +24,6 @@ from app.services.profiler import (
     compute_skewness,
     detect_outliers_iqr,
     detect_outliers_zscore,
-    is_normal_shapiro,
     maybe_sample,
     normalized_entropy,
 )
@@ -70,7 +71,7 @@ def test_zscore_zero_std_returns_no_outliers() -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 2. Distribution: Shapiro-Wilk и моменты
+# 2. Distribution: тесты нормальности (Shapiro / Kolmogorov-Smirnov) и моменты
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -78,25 +79,63 @@ def test_shapiro_normal_passes() -> None:
     """На нормальной выборке Шапиро-Уилк не отвергает H0 (p > 0.05)."""
     rng = np.random.default_rng(42)
     values = rng.normal(0, 1, 500)
-    is_normal, p = is_normal_shapiro(values)
+    is_normal, p, method = check_normality(values)
     assert is_normal is True
     assert p is not None and p > 0.05
+    assert method == "shapiro"
 
 
 def test_shapiro_skewed_fails() -> None:
     """На сильно асимметричной (экспоненциальной) выборке тест отвергает H0."""
     rng = np.random.default_rng(42)
     values = rng.exponential(1.0, 500)
-    is_normal, p = is_normal_shapiro(values)
+    is_normal, p, method = check_normality(values)
     assert is_normal is False
     assert p is not None and p < 0.05
+    assert method == "shapiro"
 
 
-def test_shapiro_constant_returns_not_normal() -> None:
+def test_normality_constant_returns_not_normal() -> None:
     """Граничный случай: на константе тест не должен падать с warning."""
     values = np.full(10, 5.0)
-    is_normal, p = is_normal_shapiro(values)
-    assert is_normal is False and p is None
+    is_normal, p, method = check_normality(values)
+    assert is_normal is False
+    assert p is None
+    assert method is None
+
+
+def test_ks_used_for_large_normal_sample() -> None:
+    """
+    Требование ТЗ п.3.2.1: для n > 5000 применяется критерий Колмогорова-Смирнова.
+
+    На нормальной выборке размером SHAPIRO_MAX_N + 1 должен использоваться KS,
+    а не Шапиро (для которого размер выборки за пределами области применимости).
+    """
+    rng = np.random.default_rng(42)
+    values = rng.normal(0, 1, SHAPIRO_MAX_N + 1)
+    is_normal, p, method = check_normality(values)
+    assert method == "ks"
+    assert p is not None and p > 0.05
+    assert is_normal is True
+
+
+def test_ks_rejects_non_normal_large_sample() -> None:
+    """KS-критерий отвергает H0 на большой экспоненциальной выборке."""
+    rng = np.random.default_rng(42)
+    values = rng.exponential(1.0, SHAPIRO_MAX_N + 1)
+    is_normal, p, method = check_normality(values)
+    assert method == "ks"
+    assert p is not None and p < 0.05
+    assert is_normal is False
+
+
+def test_shapiro_boundary_n_5000() -> None:
+    """На границе n == SHAPIRO_MAX_N используется Шапиро, n+1 — KS."""
+    rng = np.random.default_rng(42)
+    _, _, method_boundary = check_normality(rng.normal(0, 1, SHAPIRO_MAX_N))
+    _, _, method_above = check_normality(rng.normal(0, 1, SHAPIRO_MAX_N + 1))
+    assert method_boundary == "shapiro"
+    assert method_above == "ks"
 
 
 def test_skewness_zero_for_normal() -> None:
@@ -236,6 +275,7 @@ def test_compute_meta_features_returns_full_set() -> None:
         "mean_kurtosis",
         "outliers_pct",
         "normality_test_pvalue",
+        "normality_test_method",
         "high_cardinality_cols",
         "low_variance_numeric_cols",
         "low_variance_categorical_cols",
