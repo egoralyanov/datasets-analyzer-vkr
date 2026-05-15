@@ -52,10 +52,7 @@ export function Login() {
 
   return (
     <div className="mx-auto max-w-[480px] px-8 py-16">
-      <p className="font-sans text-xs font-medium uppercase tracking-wider text-paper-500">
-        АУТЕНТИФИКАЦИЯ
-      </p>
-      <h1 className="mt-2 flex items-baseline gap-3 font-serif text-[2rem] font-bold leading-tight tracking-tight text-paper-900">
+      <h1 className="flex items-baseline gap-3 font-serif text-[2rem] font-bold leading-tight tracking-tight text-paper-900">
         <span className="font-sans text-base font-medium text-paper-400">
           §
         </span>
