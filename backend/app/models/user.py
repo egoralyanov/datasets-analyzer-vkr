@@ -1,7 +1,7 @@
 """
 ORM-модель пользователя системы.
 
-Соответствует таблице `users` (см. .knowledge/architecture/database.md, раздел 1).
+Соответствует таблице `users` (см. .project_docs/architecture/database.md, раздел 1).
 Хранит учётные данные и роль ('user' | 'admin'). Пароль хранится только в виде
 bcrypt-хэша в поле `password_hash`.
 """

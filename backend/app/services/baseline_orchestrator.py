@@ -16,8 +16,8 @@ Async-оркестратор обучения baseline-моделей.
 - В поток уходит только чистая `train_baseline_from_df(df, meta, ...)` —
   она не трогает БД и потому безопасна.
 
-См. .knowledge/methods/baseline-training.md, раздел «Асинхронная обёртка
-в оркестраторе» и .knowledge/troubleshooting.md (грабли BackgroundTask
+См. .project_docs/methods/baseline-training.md, раздел «Асинхронная обёртка
+в оркестраторе» и .project_docs/troubleshooting.md (грабли BackgroundTask
 после рестарта — статус сбрасывается в `reset_running_to_failed`).
 """
 from __future__ import annotations

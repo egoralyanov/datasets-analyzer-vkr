@@ -23,8 +23,8 @@
    параметризовать через `:param`, его подставляем в f-string, но только из
    фиксированного множества (защита от SQL-инъекции).
 
-См. `.knowledge/methods/dataset-matching.md` (полная теория и обоснование cosine
-как основной метрики) и `.knowledge/architecture/database.md` (HNSW-индекс
+См. `.project_docs/methods/dataset-matching.md` (полная теория и обоснование cosine
+как основной метрики) и `.project_docs/architecture/database.md` (HNSW-индекс
 `external_datasets_embedding_idx` создан в Phase 1 миграции).
 """
 from __future__ import annotations
@@ -116,7 +116,7 @@ def meta_features_to_embedding(
 
     Возвращает список Python-float'ов (а не np.ndarray), потому что
     pgvector-sqlalchemy с list работает стабильнее на разных версиях
-    (см. `.knowledge/architecture/database.md` — заметка про сериализацию).
+    (см. `.project_docs/architecture/database.md` — заметка про сериализацию).
 
     Args:
         meta: словарь meta-features из `compute_meta_features()`.

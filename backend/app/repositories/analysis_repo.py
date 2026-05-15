@@ -240,7 +240,7 @@ def reset_running_to_failed(db: Session) -> int:
        синхронно перед `add_task`, и если контейнер падает между INSERT'ом
        и стартом задачи — pending без задачи навсегда зависнет в очереди.
 
-    См. .knowledge/troubleshooting.md, раздел про BackgroundTask.
+    См. .project_docs/troubleshooting.md, раздел про BackgroundTask.
 
     Returns:
         Суммарное число переведённых записей (analyses + baselines + reports).

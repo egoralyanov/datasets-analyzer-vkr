@@ -1,4 +1,4 @@
-// Методы API аутентификации. См. .knowledge/architecture/api-contract.md, раздел 1.
+// Методы API аутентификации. См. .project_docs/architecture/api-contract.md, раздел 1.
 import { apiClient } from "./client";
 import type {
   ChangePasswordRequest,

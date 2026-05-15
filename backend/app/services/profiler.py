@@ -4,12 +4,12 @@
 Модуль реализует первый научный слой системы — расчёт ~30 признакового описания
 датасета (meta-features), которые используются:
 1. Quality checker'ом для применения 12 правил качества данных.
-2. Подбором похожих датасетов в Спринте 3 (через нормализацию meta-features
+2. Подбором похожих датасетов (через нормализацию meta-features
    в эмбеддинг и косинусную меру в pgvector).
-3. Мета-классификатором для рекомендации типа ML-задачи (Спринт 3).
+3. Мета-классификатором для рекомендации типа ML-задачи.
 
 Полное теоретическое обоснование методов и список всех meta-features —
-в .knowledge/methods/profiling.md (этот файл войдёт в Главу 2 РПЗ).
+в .project_docs/methods/profiling.md (этот файл войдёт в Главу 2 РПЗ).
 
 Используемые методы и источники:
 - Tukey J.W. "Exploratory Data Analysis", 1977 — IQR-метод обнаружения выбросов.
@@ -19,7 +19,7 @@
 - Cover T., Thomas J. "Elements of Information Theory", 2006 — Mutual Information.
 - Shannon C.E. "A Mathematical Theory of Communication", 1948 — энтропия.
 
-Принципы реализации (см. CLAUDE.md):
+Принципы реализации (см. DEV_NOTES.md):
 - Воспроизводимость: все рандомизированные операции (сэмплирование, MI)
   фиксируются `random_state=42`.
 - Объяснимость: каждая meta-feature имеет ясное определение и источник —
@@ -61,7 +61,7 @@ def detect_outliers_iqr(values: np.ndarray) -> np.ndarray:
     распределениям, не близким к нормальному.
 
     Источник: Tukey J.W. "Exploratory Data Analysis", 1977.
-    См. .knowledge/methods/profiling.md, раздел 1.1.
+    См. .project_docs/methods/profiling.md, раздел 1.1.
 
     Args:
         values: одномерный массив числовых значений (без NaN).
@@ -89,7 +89,7 @@ def detect_outliers_zscore(values: np.ndarray, threshold: float = 3.0) -> np.nda
     применяется только после проверки нормальности (Шапиро-Уилк).
 
     Источник: классический метод математической статистики.
-    См. .knowledge/methods/profiling.md, раздел 1.2.
+    См. .project_docs/methods/profiling.md, раздел 1.2.
 
     Args:
         values: одномерный массив числовых значений (без NaN).
@@ -113,7 +113,7 @@ def count_outliers(values: np.ndarray, is_normal: bool) -> int:
     """
     Подсчёт выбросов с автоматическим выбором метода по результату теста нормальности.
 
-    Логика выбора согласно .knowledge/methods/profiling.md, раздел 1.3:
+    Логика выбора согласно .project_docs/methods/profiling.md, раздел 1.3:
     - распределение нормальное → Z-score (порог |z|>3);
     - иначе → IQR-метод Тьюки (более робастен).
 
@@ -161,7 +161,7 @@ def check_normality(
       distribuzione", 1933; Смирнов Н.В. "Table for estimating the goodness
       of fit of empirical distributions", 1948.
 
-    См. .knowledge/methods/profiling.md, разделы 2.1 и 2.2.
+    См. .project_docs/methods/profiling.md, разделы 2.1 и 2.2.
 
     Args:
         values: одномерный массив числовых значений (без NaN).
@@ -199,7 +199,7 @@ def compute_skewness(values: np.ndarray) -> float | None:
     γ₁ = E[(X-μ)³]/σ³. Близко к 0 — симметричное; > 0 — длинный правый хвост;
     < 0 — длинный левый хвост.
 
-    См. .knowledge/methods/profiling.md, раздел 3.1.
+    См. .project_docs/methods/profiling.md, раздел 3.1.
 
     Args:
         values: одномерный массив числовых значений (без NaN).
@@ -220,7 +220,7 @@ def compute_kurtosis(values: np.ndarray) -> float | None:
     γ₂ = E[(X-μ)⁴]/σ⁴ - 3. Близко к 0 — нормальное распределение;
     > 0 — острая вершина и тяжёлые хвосты; < 0 — плоская вершина.
 
-    См. .knowledge/methods/profiling.md, раздел 3.2.
+    См. .project_docs/methods/profiling.md, раздел 3.2.
 
     Args:
         values: одномерный массив числовых значений (без NaN).
@@ -244,7 +244,7 @@ def compute_entropy(values: pd.Series) -> float | None:
     - H = log₂(k) → все k значений равновероятны (максимальное разнообразие).
 
     Источник: Shannon C.E. "A Mathematical Theory of Communication", 1948.
-    См. .knowledge/methods/profiling.md, раздел 4.1.
+    См. .project_docs/methods/profiling.md, раздел 4.1.
 
     Args:
         values: серия категориальных значений (могут быть NaN — пропускаются).
@@ -266,7 +266,7 @@ def normalized_entropy(values: pd.Series) -> float | None:
 
     1.0 — все значения равновероятны; 0.0 — одно значение доминирует.
     Удобна для сравнения признаков с разной кардинальностью.
-    См. .knowledge/methods/profiling.md, раздел 4.1.
+    См. .project_docs/methods/profiling.md, раздел 4.1.
     """
     h = compute_entropy(values)
     if h is None:
@@ -357,7 +357,7 @@ def maybe_sample(
     Факт сэмплирования логируется в meta-features как
     {"sampled": true, "sample_size": ..., "original_size": ...}, чтобы
     пользователь видел, на каких данных производился расчёт. Это требование
-    объяснимости (см. CLAUDE.md, принципы проекта).
+    объяснимости (см. DEV_NOTES.md, принципы проекта).
 
     Args:
         df: исходный DataFrame.
@@ -657,7 +657,7 @@ def compute_mi_with_target(
       категориального, mutual_info_regression для числового.
 
     Источник: Cover T., Thomas J. "Elements of Information Theory", 2006.
-    См. .knowledge/methods/profiling.md, раздел 5.3.
+    См. .project_docs/methods/profiling.md, раздел 5.3.
 
     Args:
         df: DataFrame, включая колонку target.
@@ -728,7 +728,7 @@ def compute_correlations(
     - target_correlation_max: максимум |r| между признаком и числовым target
       (если target числовой). Используется правилом LEAKAGE_SUSPICION.
 
-    Источник: классическая статистика. См. .knowledge/methods/profiling.md,
+    Источник: классическая статистика. См. .project_docs/methods/profiling.md,
     раздел 5.1.
     """
     result: dict[str, Any] = {

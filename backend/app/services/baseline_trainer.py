@@ -21,19 +21,19 @@
 
 Для CLUSTERING / NOT_READY возвращается заглушка — задачи без целевой
 переменной не имеют однозначного эталонного качества (см.
-.knowledge/methods/baseline-training.md, раздел «Для кластеризации»).
+.project_docs/methods/baseline-training.md, раздел «Для кластеризации»).
 
-Принципы реализации (см. CLAUDE.md и baseline-training.md):
+Принципы реализации (см. DEV_NOTES.md и baseline-training.md):
 - Превентивный лимит на время: стратифицированный сэмпл до 5000 строк +
   фиксированные гиперпараметры моделей. Никаких multiprocessing/signal/timeout —
   они несовместимы с asyncio event loop FastAPI и плодят зомби-процессы.
 - Защита от утечки: колонки с флагом LEAKAGE_SUSPICION исключаются перед
-  обучением (см. .knowledge/methods/quality-checks.md, правило 9).
+  обучением (см. .project_docs/methods/quality-checks.md, правило 9).
 - Кросс-валидация (5 фолдов) — основная защита от переобучения; в результате
   возвращается mean ± std по фолдам.
 
 Источник: Bishop C. "Pattern Recognition and Machine Learning", Springer, 2006.
-См. .knowledge/methods/baseline-training.md.
+См. .project_docs/methods/baseline-training.md.
 """
 from __future__ import annotations
 

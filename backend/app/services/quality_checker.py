@@ -1,18 +1,18 @@
 """
 Сервис проверки качества данных: применение 12 правил к meta-features и df.
 
-Полное описание правил, формул и порогов — в .knowledge/methods/quality-checks.md
+Полное описание правил, формул и порогов — в .project_docs/methods/quality-checks.md
 (этот файл войдёт в Главу 2 РПЗ как раздел «Контроль качества данных»).
 
 Принципы реализации:
-- Каждое правило — отдельная функция-чекер (Правило 6 из CLAUDE.md), что
+- Каждое правило — отдельная функция-чекер (Правило 6 из DEV_NOTES.md), что
   делает каждое правило защитимым на ГЭК и легко тестируемым (Phase 4).
 - Чекеры **не пересчитывают** статистики, которые уже есть в meta-features —
   это и согласованнее, и быстрее: профайлер посчитал один раз, дальше только
   применяем пороги.
 - Пороги хранятся в таблице quality_rules.thresholds (JSONB) и подгружаются
   в run_quality_checks. Это позволяет администратору менять чувствительность
-  правил без редеплоя — требование .knowledge/methods/quality-checks.md.
+  правил без редеплоя — требование .project_docs/methods/quality-checks.md.
 - Чекер возвращает 0..N черновиков FlagDraft. 0 — если правило не
   сработало; N>1 — если правило срабатывает по разным колонкам (например,
   HIGH_MISSING для каждой проблемной колонки даёт отдельный флаг).
@@ -72,7 +72,7 @@ def check_target_missing(
     (по умолчанию 5%). Наблюдения с NaN в target нельзя использовать для
     обучения с учителем — их придётся отбросить или восстанавливать.
 
-    См. .knowledge/methods/quality-checks.md, правило 2.
+    См. .project_docs/methods/quality-checks.md, правило 2.
 
     Args:
         df: DataFrame.
@@ -122,7 +122,7 @@ def check_leakage_suspicion(
     На каждый подозрительный признак создаётся отдельный флаг — пользователь
     должен видеть конкретный список колонок, который требует проверки.
 
-    См. .knowledge/methods/quality-checks.md, правило 9.
+    См. .project_docs/methods/quality-checks.md, правило 9.
 
     Args:
         df: DataFrame.
@@ -204,7 +204,7 @@ def check_high_missing(
 
     На каждую проблемную колонку — отдельный флаг.
 
-    См. .knowledge/methods/quality-checks.md, правило 1.
+    См. .project_docs/methods/quality-checks.md, правило 1.
     """
     threshold = float(thresholds.get("max_col_missing_pct", 0.3))
     missing_by_col = meta.get("missing_by_column", {})
@@ -243,7 +243,7 @@ def check_duplicates(
     Условие: duplicate_rows_pct > `max_duplicates_pct` (по умолчанию 5%).
     Дубликаты искажают оценки качества модели и могут попасть и в train, и в test.
 
-    См. .knowledge/methods/quality-checks.md, правило 3.
+    См. .project_docs/methods/quality-checks.md, правило 3.
     """
     threshold = float(thresholds.get("max_duplicates_pct", 0.05))
     pct = float(meta.get("duplicate_rows_pct", 0.0))
@@ -278,7 +278,7 @@ def check_imbalance_binary(
     Условие: target — категориальный с ровно двумя классами, а соотношение
     max/min размера класса превышает `max_imbalance_ratio` (по умолчанию 10:1).
 
-    См. .knowledge/methods/quality-checks.md, правило 6.
+    См. .project_docs/methods/quality-checks.md, правило 6.
     """
     if meta.get("target_kind") != "categorical":
         return []
@@ -321,7 +321,7 @@ def check_imbalance_multiclass(
     про абсолютный размер: даже при сбалансированных пропорциях, если
     каждого класса < 50, надёжно учиться нельзя.
 
-    См. .knowledge/methods/quality-checks.md, правило 7.
+    См. .project_docs/methods/quality-checks.md, правило 7.
     """
     if meta.get("target_kind") != "categorical":
         return []
@@ -362,7 +362,7 @@ def check_small_dataset(
     Условие: число строк (оригинального датасета, до сэмплирования) ниже
     порога `min_rows` (по умолчанию 100).
 
-    См. .knowledge/methods/quality-checks.md, правило 10.
+    См. .project_docs/methods/quality-checks.md, правило 10.
     """
     threshold = int(thresholds.get("min_rows", 100))
     sampling = meta.get("sampling") or {}
@@ -393,7 +393,7 @@ def check_too_few_features(
     Условие: число столбцов после исключения target меньше `min_cols`
     (по умолчанию 3).
 
-    См. .knowledge/methods/quality-checks.md, правило 11.
+    См. .project_docs/methods/quality-checks.md, правило 11.
     """
     threshold = int(thresholds.get("min_cols", 3))
     n_cols = int(meta.get("n_cols", 0))
@@ -433,7 +433,7 @@ def check_low_variance(
 
     На каждую малоинформативную колонку — отдельный флаг.
 
-    См. .knowledge/methods/quality-checks.md, правило 4.
+    См. .project_docs/methods/quality-checks.md, правило 4.
     """
     drafts: list[FlagDraft] = []
     numeric_cv_threshold = float(thresholds.get("min_cv", 0.01))
@@ -487,7 +487,7 @@ def check_high_cardinality(
     (по умолчанию 0.5). Возможно, это идентификатор — обычно нужно
     исключить из обучения.
 
-    См. .knowledge/methods/quality-checks.md, правило 5.
+    См. .project_docs/methods/quality-checks.md, правило 5.
     """
     threshold = float(thresholds.get("max_cardinality_ratio", 0.5))
     drafts: list[FlagDraft] = []
@@ -525,7 +525,7 @@ def check_outliers(
     нормальных распределений, IQR-метод Тьюки иначе) — здесь только
     применяем порог к посчитанной доле.
 
-    См. .knowledge/methods/quality-checks.md, правило 8.
+    См. .project_docs/methods/quality-checks.md, правило 8.
     """
     threshold = float(thresholds.get("max_outliers_pct", 0.05))
     drafts: list[FlagDraft] = []
@@ -567,7 +567,7 @@ def check_date_not_parsed(
     90%) — флаг. Преобразование в datetime раскрывает дополнительные
     признаки (год, месяц, день недели).
 
-    См. .knowledge/methods/quality-checks.md, правило 12.
+    См. .project_docs/methods/quality-checks.md, правило 12.
     """
     threshold = float(thresholds.get("min_date_parse_rate", 0.9))
     drafts: list[FlagDraft] = []

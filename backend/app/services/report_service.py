@@ -8,8 +8,8 @@ worker-потоке. Сессия БД создаётся внутри функ�
 а не передаётся через `Depends` (HTTP-сессия уже закрыта к моменту запуска
 фон-задачи).
 
-См. .knowledge/stack/why-weasyprint.md (выбор движка PDF) и
-.knowledge/architecture/charts.md (политика согласования PNG-графиков
+См. .project_docs/stack/why-weasyprint.md (выбор движка PDF) и
+.project_docs/architecture/charts.md (политика согласования PNG-графиков
 между matplotlib для PDF и Plotly для UI).
 
 Архитектура: четыре функции, разделённые ради тестируемости.

@@ -29,7 +29,7 @@
 Поэтому в Phase 3 есть тест `test_canonical_feature_order_hash_stable`, который
 ловит молчаливое изменение порядка через хеш списка ключей.
 
-См. `.knowledge/methods/recommender-ml.md`, разделы «Сбор обучающей выборки»
+См. `.project_docs/methods/recommender-ml.md`, разделы «Сбор обучающей выборки»
 и «Применение модели».
 """
 from __future__ import annotations

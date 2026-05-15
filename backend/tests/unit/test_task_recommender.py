@@ -33,7 +33,7 @@ discrete target (метки `"0"/"1"/"2"`, малая кардинальност
   явно проверяет, что Iris проходит через Слой 2 (`source ∈ {hybrid, ml}`,
   ml_probabilities заполнены), а не через rules-only.
 
-См. .knowledge/methods/recommender-rules.md (раздел про numeric-discrete
+См. .project_docs/methods/recommender-rules.md (раздел про numeric-discrete
 bridge будет добавлен в Phase 9 через update-knowledge).
 """
 from __future__ import annotations
@@ -425,7 +425,7 @@ def test_recommend_iris_returns_multiclass():
     делегирование, ML дал предсказание). task_type_code остаётся
     MULTICLASS — и правило, и ML согласны.
 
-    См. .knowledge/methods/recommender-rules.md (раздел про numeric-
+    См. .project_docs/methods/recommender-rules.md (раздел про numeric-
     discrete bridge будет добавлен в Phase 9 через update-knowledge).
     """
     iris = load_iris(as_frame=True)

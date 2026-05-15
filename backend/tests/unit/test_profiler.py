@@ -3,7 +3,7 @@ Unit-тесты для профайлера (backend/app/services/profiler.py).
 
 Каждый тест работает на синтетических данных (numpy + pandas), не зависит
 от файловой системы и БД. Цель — зафиксировать корректность математических
-утверждений из .knowledge/methods/profiling.md, чтобы их можно было защитить
+утверждений из .project_docs/methods/profiling.md, чтобы их можно было защитить
 на ГЭК ссылкой на конкретный зелёный тест.
 """
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """
 ORM-модель результата анализа датасета.
 
-Соответствует таблице `analysis_results` (см. .knowledge/architecture/database.md, раздел 4).
+Соответствует таблице `analysis_results` (см. .project_docs/architecture/database.md, раздел 4).
 Связана с `analyses` отношением 1:1 — `analysis_id` одновременно PK и FK.
 
 Поля:

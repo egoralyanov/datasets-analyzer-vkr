@@ -54,7 +54,7 @@ TARGET_CLASSES = {
 }
 
 
-# Гиперпараметры — фиксированы. См. `.knowledge/methods/recommender-ml.md`.
+# Гиперпараметры — фиксированы. См. `.project_docs/methods/recommender-ml.md`.
 RF_PARAMS = {
     "n_estimators": 200,
     "max_depth": 10,

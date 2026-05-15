@@ -1,4 +1,4 @@
-// Методы API для работы с датасетами. См. .knowledge/architecture/api-contract.md, раздел 2.
+// Методы API для работы с датасетами. См. .project_docs/architecture/api-contract.md, раздел 2.
 import { apiClient } from "./client";
 import type {
   Dataset,

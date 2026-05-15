@@ -1,8 +1,8 @@
 """
 ORM-модель правила проверки качества данных.
 
-Соответствует таблице `quality_rules` (см. .knowledge/architecture/database.md, раздел 5,
-и .knowledge/methods/quality-checks.md — описание всех 12 правил).
+Соответствует таблице `quality_rules` (см. .project_docs/architecture/database.md, раздел 5,
+и .project_docs/methods/quality-checks.md — описание всех 12 правил).
 
 Справочник правил живёт в БД, чтобы пороги можно было менять без редеплоя:
 поле `thresholds` — JSONB вида `{"max_col_missing_pct": 0.3}`. Сами правила

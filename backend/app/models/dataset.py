@@ -1,7 +1,7 @@
 """
 ORM-модель загруженного пользователем датасета.
 
-Соответствует таблице `datasets` (см. .knowledge/architecture/database.md, раздел 2).
+Соответствует таблице `datasets` (см. .project_docs/architecture/database.md, раздел 2).
 В БД хранятся только метаданные и `storage_path` — сам файл лежит на диске
 по пути /data/datasets/{user_id}/{uuid}.{ext}.
 

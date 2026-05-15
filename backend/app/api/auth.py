@@ -1,13 +1,13 @@
 """
 API-эндпоинты аутентификации.
 
-См. .knowledge/architecture/api-contract.md, раздел 1.
+См. .project_docs/architecture/api-contract.md, раздел 1.
 
 Особенности безопасности:
 - При логине не различаем "пользователь не найден" и "неверный пароль" — единый
   ответ 401 с общим сообщением, чтобы не давать оракул для перебора.
 - При смене пароля ранее выданные JWT остаются валидными до своего exp:
-  revocation list осознанно не делаем (см. .knowledge/project/scope.md).
+  revocation list осознанно не делаем (см. .project_docs/project/scope.md).
 """
 from datetime import datetime, timezone
 

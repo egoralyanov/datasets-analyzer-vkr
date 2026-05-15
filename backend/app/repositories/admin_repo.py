@@ -4,7 +4,7 @@
 
 Использует scalar-subqueries вместо LEFT JOIN ... GROUP BY — это избавляет
 от GROUP BY на всех колонках User и оставляет основной запрос линейным
-по структуре (см. .knowledge/architecture/database.md, раздел 1).
+по структуре (см. .project_docs/architecture/database.md, раздел 1).
 """
 from __future__ import annotations
 

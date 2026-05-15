@@ -5,7 +5,7 @@
 Возвращает `TaskRecommendation` с финальным task_type_code, confidence, источником
 решения и текстовым объяснением.
 
-Алгоритм гибрида (см. `.knowledge/methods/recommender-ml.md`, раздел «Логика гибрида»):
+Алгоритм гибрида (см. `.project_docs/methods/recommender-ml.md`, раздел «Логика гибрида»):
 
     rules_result = apply_rules(meta, target_column, active_quality_flags)
     model, scaler = _load_meta_classifier_safe()
@@ -163,7 +163,7 @@ def apply_rules(
     """
     Детерминированное дерево решений Слоя 1.
 
-    Алгоритм веток — точно по `.knowledge/methods/recommender-rules.md`:
+    Алгоритм веток — точно по `.project_docs/methods/recommender-rules.md`:
     1. target_column is None → CLUSTERING (с DIMENSIONALITY_REDUCTION-меткой при n_features > 10)
     2. target_kind == "regression" → BINARY/REGRESSION/AMBIGUOUS по target_n_unique
     3. target_kind == "categorical" → BINARY/MULTICLASS/NOT_READY/HIGH_CARDINALITY

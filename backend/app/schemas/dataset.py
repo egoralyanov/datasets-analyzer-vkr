@@ -31,7 +31,7 @@ class DatasetWithPreview(DatasetResponse):
 class DatasetUsageResponse(BaseModel):
     """
     Используется на странице удаления, чтобы показать пользователю, сколько
-    артефактов уйдёт вместе с датасетом (см. .knowledge/architecture/api-contract.md,
+    артефактов уйдёт вместе с датасетом (см. .project_docs/architecture/api-contract.md,
     Спринт 6, Phase 4.2).
 
     `analyses_count` — все анализы датасета без фильтра по статусу.

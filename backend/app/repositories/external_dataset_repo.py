@@ -18,8 +18,8 @@
   (`dataset_matcher.OPERATORS`). На уровне репозитория повторно валидируем
   оператор через явный whitelist для defense-in-depth.
 
-См. `.knowledge/methods/dataset-matching.md` (раздел «Реализация поиска») и
-`.knowledge/architecture/database.md` (структура таблицы `external_datasets`,
+См. `.project_docs/methods/dataset-matching.md` (раздел «Реализация поиска») и
+`.project_docs/architecture/database.md` (структура таблицы `external_datasets`,
 HNSW-индекс на `embedding`).
 """
 from __future__ import annotations

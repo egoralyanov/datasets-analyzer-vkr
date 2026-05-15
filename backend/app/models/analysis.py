@@ -1,7 +1,7 @@
 """
 ORM-модель запуска анализа датасета.
 
-Соответствует таблице `analyses` (см. .knowledge/architecture/database.md, раздел 3).
+Соответствует таблице `analyses` (см. .project_docs/architecture/database.md, раздел 3).
 Хранит параметры запуска (target_column, hinted_task_type) и состояние выполнения.
 Сами результаты профилирования живут в отдельной таблице `analysis_results`,
 которая появится в Спринте 2.

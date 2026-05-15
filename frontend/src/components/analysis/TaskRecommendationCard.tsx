@@ -11,7 +11,7 @@
 // вероятности ML» добавлено always-visible пояснение о том, как работает
 // Слой 2 (по каким признакам и что именно сравнивается с эталонами).
 // Показывается только при source ∈ {hybrid, ml}, потому что при чистых
-// правилах Слой 2 не вызывается. См. .knowledge/methods/recommender-ml.md.
+// правилах Слой 2 не вызывается. См. .project_docs/methods/recommender-ml.md.
 //
 // См. frontend/DESIGN_TOKENS.md, разделы 7 и 8.4.
 import { useState } from "react";

@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
 
     На старте: переводит «зависшие» running-анализы в failed.
     BackgroundTasks живут в памяти процесса — при перезапуске контейнера они
-    теряются, но запись в БД остаётся. См. .knowledge/troubleshooting.md.
+    теряются, но запись в БД остаётся. См. .project_docs/troubleshooting.md.
     """
     db = SessionLocal()
     try:

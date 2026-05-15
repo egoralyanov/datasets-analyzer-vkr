@@ -1,7 +1,7 @@
 """
 ORM-модель PDF-отчёта по результатам анализа датасета.
 
-Соответствует таблице `reports` (см. .knowledge/architecture/database.md).
+Соответствует таблице `reports` (см. .project_docs/architecture/database.md).
 Запись отчёта создаётся при нажатии кнопки «Сгенерировать отчёт» на странице
 анализа: фон-задача рендерит HTML через Jinja2 + WeasyPrint, складывает PDF
 на диск в `/data/reports/{user_id}/{report_id}.pdf` и обновляет запись

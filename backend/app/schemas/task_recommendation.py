@@ -21,8 +21,8 @@
 - DIMENSIONALITY_REDUCTION — НЕ как самостоятельный task_type_code, а как метка
   правила NO_TARGET_HIGH_DIM в applied_rules (вспомогательный шаг перед CLUSTERING).
 
-См. `.knowledge/methods/recommender-rules.md` (дерево правил) и
-`.knowledge/methods/recommender-ml.md` (логика гибрида).
+См. `.project_docs/methods/recommender-rules.md` (дерево правил) и
+`.project_docs/methods/recommender-ml.md` (логика гибрида).
 """
 from __future__ import annotations
 

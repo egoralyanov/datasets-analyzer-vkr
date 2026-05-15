@@ -1,8 +1,8 @@
 """
 ORM-модель записи каталога внешних датасетов.
 
-Соответствует таблице `external_datasets` (см. .knowledge/architecture/database.md, раздел 8,
-и .knowledge/methods/dataset-matching.md — алгоритм поиска похожих через pgvector).
+Соответствует таблице `external_datasets` (см. .project_docs/architecture/database.md, раздел 8,
+и .project_docs/methods/dataset-matching.md — алгоритм поиска похожих через pgvector).
 
 Каталог хранит эталонные датасеты из открытых источников (sklearn, UCI, GitHub),
 для каждой записи посчитан embedding на основе meta-features того же набора признаков,

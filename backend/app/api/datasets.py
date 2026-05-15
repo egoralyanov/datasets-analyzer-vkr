@@ -1,7 +1,7 @@
 """
 API-эндпоинты для работы с датасетами.
 
-См. .knowledge/architecture/api-contract.md, раздел 2.
+См. .project_docs/architecture/api-contract.md, раздел 2.
 """
 import logging
 import uuid

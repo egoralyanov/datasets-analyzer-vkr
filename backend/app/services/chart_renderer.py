@@ -6,7 +6,7 @@
 не выполняет JavaScript, поэтому Plotly-графики UI здесь не подходят —
 используется matplotlib в Agg-backend, без X-сервера.
 
-См. .knowledge/architecture/charts.md, раздел «На бэке (matplotlib)» —
+См. .project_docs/architecture/charts.md, раздел «На бэке (matplotlib)» —
 архитектурное обоснование двух движков рендера и принцип «один источник
 данных, два рендера».
 

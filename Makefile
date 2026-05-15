@@ -26,7 +26,7 @@ migrate-create:
 # Загрузка всех справочников. На Спринте 2 — только quality_rules.
 seed: seed-rules
 
-# Загрузка справочника правил качества (12 правил из .knowledge/methods/quality-checks.md).
+# Загрузка справочника правил качества (12 правил из .project_docs/methods/quality-checks.md).
 # Идемпотентно: повторный запуск не плодит дубликаты и не перезаписывает существующие записи.
 seed-rules:
 	docker compose exec backend python -m seeds.seed_quality_rules

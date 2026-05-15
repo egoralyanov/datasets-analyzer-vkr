@@ -25,7 +25,7 @@ def detect_encoding(path: Path) -> str:
     Определяет кодировку файла по первым ~10 КБ.
 
     Если chardet возвращает None или малую уверенность — fallback на utf-8.
-    Источник: .knowledge/troubleshooting.md, раздел про cp1251.
+    Источник: .project_docs/troubleshooting.md, раздел про cp1251.
     """
     with path.open("rb") as f:
         raw = f.read(_SNIFF_BYTES)

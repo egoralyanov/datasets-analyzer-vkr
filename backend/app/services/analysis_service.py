@@ -22,8 +22,8 @@ BackgroundTasks (см. backend/app/api/analyses.py). BackgroundTask
 остаётся task_recommendation=NULL и UI показывает «Не удалось определить
 тип задачи». Аналогично с embedding (нет похожих датасетов).
 
-См. .knowledge/architecture/data-flow.md (шаг 4: фоновая задача анализа)
-и .knowledge/troubleshooting.md (грабли с BackgroundTask и рестартом).
+См. .project_docs/architecture/data-flow.md (шаг 4: фоновая задача анализа)
+и .project_docs/troubleshooting.md (грабли с BackgroundTask и рестартом).
 """
 from __future__ import annotations
 
@@ -137,7 +137,7 @@ def run_analysis(
         # 4) Embedding для подбора похожих датасетов через pgvector.
         # При отсутствии scaler.pkl (модель не обучена) — анализ не валим,
         # embedding остаётся NULL: пользователь увидит результат без секции
-        # «Похожие датасеты». См. .knowledge/methods/dataset-matching.md.
+        # «Похожие датасеты». См. .project_docs/methods/dataset-matching.md.
         embedding: list[float] | None = None
         try:
             scaler = _load_scaler_safe()

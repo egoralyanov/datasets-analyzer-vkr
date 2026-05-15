@@ -9,7 +9,7 @@ Integration-тесты потока рекомендации типа задач
    embedding длиной 128 сохраняется.
 4. /similar?top_k=5 — 5 элементов, у каждого title/source/distance.
 
-См. .knowledge/methods/recommender-rules.md, recommender-ml.md, dataset-matching.md.
+См. .project_docs/methods/recommender-rules.md, recommender-ml.md, dataset-matching.md.
 """
 from __future__ import annotations
 
