@@ -109,6 +109,8 @@ export function Distributions({ meta }: Props) {
               yaxis: {
                 ...PLOT_LAYOUT_BASE.yaxis,
                 title: { text: "Количество" },
+                type: "linear",
+                rangemode: "tozero",
               },
             }}
             config={PLOT_CONFIG}
@@ -163,6 +165,8 @@ export function Distributions({ meta }: Props) {
                       yaxis: {
                         ...PLOT_LAYOUT_BASE.yaxis,
                         title: { text: "Частота" },
+                        type: "linear",
+                        rangemode: "tozero",
                       },
                     }}
                     config={PLOT_CONFIG}
@@ -219,6 +223,8 @@ export function Distributions({ meta }: Props) {
                     yaxis: {
                       ...PLOT_LAYOUT_BASE.yaxis,
                       title: { text: "Количество" },
+                      type: "linear",
+                      rangemode: "tozero",
                     },
                   }}
                   config={PLOT_CONFIG}
