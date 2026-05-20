@@ -19,8 +19,17 @@ def create_analysis(
     dataset_id: uuid.UUID,
     user_id: uuid.UUID,
     target_column: str | None,
+    dataset_filename: str | None = None,
+    dataset_format: str | None = None,
+    dataset_n_rows: int | None = None,
+    dataset_n_cols: int | None = None,
+    dataset_file_size_bytes: int | None = None,
 ) -> Analysis:
     """Создаёт запись анализа в статусе pending — БД-фиксация через commit.
+
+    Сохраняем денормализованный снапшот метаданных датасета (имя файла,
+    формат, размеры) — после удаления Dataset эти поля останутся в Analysis
+    и продолжат показываться в истории и в PDF-отчётах.
 
     Колонка `hinted_task_type` исторически осталась в схеме БД из Спринта 1,
     но больше не заполняется: в Спринте 3 тип задачи определяет рекомендатер,
@@ -32,6 +41,11 @@ def create_analysis(
         user_id=user_id,
         target_column=target_column,
         status="pending",
+        dataset_filename=dataset_filename,
+        dataset_format=dataset_format,
+        dataset_n_rows=dataset_n_rows,
+        dataset_n_cols=dataset_n_cols,
+        dataset_file_size_bytes=dataset_file_size_bytes,
     )
     db.add(analysis)
     db.commit()
@@ -121,11 +135,12 @@ def list_user_analyses_paginated(
     """
     Пагинированный список анализов пользователя для страницы «История».
 
-    `joinedload(Analysis.dataset)` нужен для отрисовки имени файла в строке
-    списка без N+1 SELECT на каждый элемент. `joinedload(Analysis.result)`
-    подтягивает task_recommendation для отображения рекомендованного типа
-    задачи; result у анализа в pending/running ещё не существует, поэтому
-    LEFT-JOIN, а не INNER.
+    Имя файла берётся из денормализованного снапшота `Analysis.dataset_filename`
+    (заполняется при создании анализа) — никакого join'а на datasets не нужно
+    и оно остаётся читаемым после удаления исходного датасета.
+    `joinedload(Analysis.result)` подтягивает task_recommendation для
+    отображения рекомендованного типа задачи; result у анализа в pending/running
+    ещё не существует, поэтому LEFT-JOIN, а не INNER.
 
     Сортировка `started_at DESC` — самые свежие сверху. created_at в модели
     отсутствует (поле ввели в analyses ещё в Спринте 1 как started_at).
@@ -153,7 +168,6 @@ def list_user_analyses_paginated(
         select(Analysis)
         .where(*base_filters)
         .options(
-            joinedload(Analysis.dataset),
             joinedload(Analysis.result),
         )
         .order_by(Analysis.started_at.desc())

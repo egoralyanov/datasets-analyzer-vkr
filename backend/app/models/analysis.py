@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,10 +37,15 @@ class Analysis(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    dataset_id: Mapped[uuid.UUID] = mapped_column(
+    # dataset_id nullable + ON DELETE SET NULL: при удалении исходного датасета
+    # запись анализа и связанные результаты/отчёты сохраняются. Имя файла и
+    # размеры берутся из денормализованного снапшота ниже (dataset_filename и
+    # т.п.) — они пишутся при создании анализа и продолжают работать даже
+    # после удаления Dataset.
+    dataset_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("datasets.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("datasets.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -48,6 +53,13 @@ class Analysis(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # Снапшот метаданных датасета на момент создания анализа — нужен, чтобы
+    # история и отчёты остались осмысленными после удаления Dataset.
+    dataset_filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    dataset_format: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    dataset_n_rows: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dataset_n_cols: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dataset_file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     target_column: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hinted_task_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pending")

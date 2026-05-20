@@ -96,6 +96,11 @@ def run_analysis(
 
         # 2) Профилирование + проверка качества.
         dataset = analysis.dataset
+        if dataset is None:
+            # Теоретически невозможно: анализ создаётся сразу после загрузки
+            # датасета, шанса удалить его до старта BG-задачи нет. Гард —
+            # на случай гонок и поломок инвариантов.
+            raise RuntimeError("Связанный датасет не найден")
         df = read_dataset_full(Path(dataset.storage_path), dataset.format)
         meta = compute_meta_features(df, target_col=analysis.target_column)
         flags = run_quality_checks(

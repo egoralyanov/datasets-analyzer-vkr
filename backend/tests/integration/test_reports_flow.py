@@ -77,6 +77,11 @@ def completed_analysis(
             user_id=user.id,
             target_column="species",
             status="done",
+            dataset_filename=dataset.original_filename,
+            dataset_format=dataset.format,
+            dataset_n_rows=dataset.n_rows,
+            dataset_n_cols=dataset.n_cols,
+            dataset_file_size_bytes=dataset.file_size_bytes,
         )
         db_session.add(analysis)
         db_session.commit()

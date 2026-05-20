@@ -126,6 +126,12 @@ async def run_baseline_async(
         task_type = str(task_rec.get("task_type_code") or "NOT_READY")
 
         dataset = analysis.dataset
+        if dataset is None:
+            # Датасет был удалён пользователем после первого запуска анализа.
+            # Перезапустить baseline без исходного файла невозможно.
+            raise RuntimeError(
+                "Исходный датасет был удалён — повторное обучение baseline недоступно"
+            )
         df = read_dataset_full(Path(dataset.storage_path), dataset.format)
         meta = ar.meta_features or {}
         leakage_cols = _resolve_leakage_columns(db, analysis_id)

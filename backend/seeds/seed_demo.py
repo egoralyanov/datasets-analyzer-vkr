@@ -242,6 +242,11 @@ def _run_analysis_sync(db, dataset: Dataset, target_column: str | None) -> Analy
         dataset_id=dataset.id,
         user_id=dataset.user_id,
         target_column=target_column,
+        dataset_filename=dataset.original_filename,
+        dataset_format=dataset.format,
+        dataset_n_rows=dataset.n_rows,
+        dataset_n_cols=dataset.n_cols,
+        dataset_file_size_bytes=dataset.file_size_bytes,
     )
     # run_analysis открывает свою сессию через SessionLocal — наша сессия
     # тут не используется. После завершения нужно обновить локальный объект.

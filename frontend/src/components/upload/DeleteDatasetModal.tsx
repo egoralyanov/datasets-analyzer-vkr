@@ -117,9 +117,11 @@ export function DeleteDatasetModal({
   );
 }
 
-// Тело модалки с описанием последствий. Пока usage не пришёл — показываем
-// плейсхолдер «Считаем связанные артефакты…». 0/0 не выводится до
-// загрузки данных, чтобы не вводить пользователя в заблуждение.
+// Тело модалки. Объясняет: будет удалён исходный файл, а связанные анализы
+// и отчёты СОХРАНЯТСЯ — это новое поведение после правок 2026-05-20
+// (бэкенд: ON DELETE SET NULL + снапшот метаданных в Analysis).
+// Счётчики usage показываются только если что-то есть — чтобы передать
+// пользователю масштаб «истории», которая останется живой.
 function UsageBody({
   usage,
   loading,
@@ -139,7 +141,7 @@ function UsageBody({
   if (analyses_count === 0 && reports_count === 0) {
     return (
       <p className="font-serif text-[0.9375rem] leading-relaxed text-paper-700">
-        Анализов и отчётов нет. Действие необратимо.
+        Будет удалён только сам файл датасета. Связанных анализов нет.
       </p>
     );
   }
@@ -147,12 +149,17 @@ function UsageBody({
   const analysesWord = pluralize(analyses_count, PLURAL_FORMS.analysis);
   const reportsWord = pluralize(reports_count, PLURAL_FORMS.report);
   return (
-    <p className="font-serif text-[0.9375rem] leading-relaxed text-paper-700">
-      Также будет удалено:{" "}
-      <span className="font-mono text-[0.875rem]">{analyses_count}</span>{" "}
-      {analysesWord},{" "}
-      <span className="font-mono text-[0.875rem]">{reports_count}</span>{" "}
-      {reportsWord}. Действие необратимо.
-    </p>
+    <div className="space-y-2 font-serif text-[0.9375rem] leading-relaxed text-paper-700">
+      <p>
+        <span className="font-mono text-[0.875rem]">{analyses_count}</span>{" "}
+        {analysesWord} и{" "}
+        <span className="font-mono text-[0.875rem]">{reports_count}</span>{" "}
+        {reportsWord} <strong>сохранятся</strong> в истории — будет удалён
+        только исходный файл датасета.
+      </p>
+      <p className="text-[0.8125rem] text-paper-500">
+        В истории они будут отображаться с пометкой «(удалён)».
+      </p>
+    </div>
   );
 }

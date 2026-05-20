@@ -22,12 +22,19 @@ class StartAnalysisRequest(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
-    """Лёгкая модель статуса анализа — для polling и страницы истории."""
+    """Лёгкая модель статуса анализа — для polling и страницы истории.
+
+    `dataset_id` опционален: после удаления исходного датасета ссылка
+    обнуляется (FK ON DELETE SET NULL), но сам анализ и его отчёты
+    сохраняются. Имя файла берём из денормализованного снапшота
+    (`dataset_filename`) — оно остаётся читаемым даже после удаления.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    dataset_id: uuid.UUID
+    dataset_id: uuid.UUID | None
+    dataset_filename: str | None = None
     status: str
     target_column: str | None
     started_at: datetime
@@ -50,13 +57,17 @@ class AnalysisListItem(BaseModel):
 
     Не путать с `AnalysisResponse` — там более полная модель для polling
     одного анализа. Здесь только то, что нужно для строки списка:
-    идентификаторы, имя файла датасета (через joinedload), статус,
+    идентификаторы, имя файла датасета (из снапшота анализа), статус,
     рекомендованный тип задачи (если уже посчитан) и временные метки.
+
+    `dataset_id` опционален: после удаления исходного датасета он становится
+    NULL, а `dataset_deleted=True` подсвечивает строку как «(удалён)».
     """
 
     id: uuid.UUID
-    dataset_id: uuid.UUID
+    dataset_id: uuid.UUID | None
     dataset_name: str
+    dataset_deleted: bool = False
     status: str
     target_column: str | None
     recommended_task_type: str | None

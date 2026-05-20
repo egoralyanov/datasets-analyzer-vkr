@@ -35,7 +35,6 @@ from weasyprint import HTML
 from app.config import settings
 from app.models.analysis import Analysis
 from app.models.analysis_result import AnalysisResult
-from app.models.dataset import Dataset
 from app.models.quality_flag import QualityFlag
 from app.models.quality_rule import QualityRule
 from app.models.report import Report
@@ -351,7 +350,6 @@ def _build_context(
     *,
     report: Report,
     analysis: Analysis,
-    dataset: Dataset,
     user: User,
     result: AnalysisResult,
     quality_flags: list[dict],
@@ -364,13 +362,17 @@ def _build_context(
     `similar_datasets=[]`) — шаблон проверяет их через `{% if %}` без
     `is defined`. Контракт ключей зафиксирован, при отсутствии данных
     шаблон не падает и не показывает «битых» секций.
+
+    Метаданные датасета берутся из денормализованного снапшота анализа
+    (`analysis.dataset_filename` и т.п.) — это позволяет генерировать отчёт
+    даже после удаления исходного датасета.
     """
     meta = result.meta_features or {}
     target_kind = meta.get("target_kind")
 
     summary = {
-        "n_rows": meta.get("n_rows", dataset.n_rows or 0),
-        "n_cols": meta.get("n_cols", dataset.n_cols or 0),
+        "n_rows": meta.get("n_rows", analysis.dataset_n_rows or 0),
+        "n_cols": meta.get("n_cols", analysis.dataset_n_cols or 0),
         "total_missing_pct": float(meta.get("total_missing_pct") or 0.0),
         "max_col_missing_pct": float(meta.get("max_col_missing_pct") or 0.0),
         "dtype_counts": meta.get("dtype_counts") or {},
@@ -387,14 +389,15 @@ def _build_context(
     charts = _build_chart_data(meta, target_kind)
     baseline_view = _build_baseline_view(result.baseline)
 
+    dataset_filename = analysis.dataset_filename or "—"
     return {
-        "title": f"Отчёт по анализу датасета «{dataset.original_filename}»",
+        "title": f"Отчёт по анализу датасета «{dataset_filename}»",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "report_id": str(report.id),
         "user": {"username": user.username},
         "dataset": {
-            "original_filename": dataset.original_filename,
-            "format": dataset.format,
+            "original_filename": dataset_filename,
+            "format": analysis.dataset_format or "",
         },
         "analysis": {
             "id": str(analysis.id),
@@ -464,11 +467,13 @@ def generate_report(
         report.status = "running"
         db.commit()
 
-        # 2) Подгружаем связанные сущности.
+        # 2) Подгружаем связанные сущности. Сам Dataset больше не нужен —
+        #    имя файла и размеры хранятся в снапшоте анализа
+        #    (`analysis.dataset_filename` и т.п.). Это позволяет
+        #    регенерировать отчёт даже после удаления Dataset.
         analysis = db.get(Analysis, report.analysis_id)
         if analysis is None:
             raise RuntimeError("Связанный анализ не найден")
-        dataset = analysis.dataset
         user = db.get(User, report.user_id)
         if user is None:
             raise RuntimeError("Связанный пользователь не найден")
@@ -496,7 +501,6 @@ def generate_report(
         context = _build_context(
             report=report,
             analysis=analysis,
-            dataset=dataset,
             user=user,
             result=result,
             quality_flags=quality_flags,

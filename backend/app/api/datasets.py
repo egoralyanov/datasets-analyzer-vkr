@@ -25,7 +25,6 @@ from app.config import settings
 from app.file_storage import (
     compute_file_sha256,
     delete_dataset_file,
-    delete_report_file,
     save_uploaded_file,
 )
 from app.models.user import User
@@ -227,44 +226,28 @@ def delete_my_dataset(
     db: Session = Depends(get_db),
 ) -> Response:
     """
-    Удаляет датасет и все связанные артефакты (Спринт 6, Phase 4.6 — закрытие
-    known limitation #5 из Sprint 4: orphan PDF после cascade-удаления).
+    Удаляет только сам датасет и его исходный файл.
 
-    FK ondelete=CASCADE уносит analyses → analysis_results / quality_flags /
-    reports на уровне БД. Файлы (storage_path датасета и file_path PDF
-    success-отчётов всех его анализов) собираются ДО `db.delete(dataset)` —
-    после cascade узнать пути было бы негде. После `db.commit()` файлы
-    удаляются `unlink(missing_ok=True)`; OSError собираются и логируются
-    WARNING без отката БД (паттерн из 4.3 / 4.4).
+    Связанные анализы и PDF-отчёты СОХРАНЯЮТСЯ: FK
+    analyses.dataset_id = ON DELETE SET NULL обнуляет ссылку на удалённый
+    датасет, а имя файла/размеры остаются в денормализованном снапшоте
+    анализа (`analyses.dataset_filename` и т.п.). История и отчёты дальше
+    отображаются с пометкой «(удалён)».
     """
     dataset = dataset_repo.get_dataset(db, dataset_id, current_user.id)
     if dataset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Датасет не найден")
 
-    # Снимок путей ДО cascade-удаления записей.
     storage_path = dataset.storage_path
-    report_paths = dataset_repo.get_report_file_paths_for_dataset(
-        db, dataset_id
-    )
-
     dataset_repo.delete_dataset(db, dataset)
 
-    # После коммита чистим диск. Любая ошибка — WARNING без отката БД.
-    failed_unlinks: list[str] = []
     try:
         delete_dataset_file(storage_path)
     except OSError:
-        failed_unlinks.append(storage_path)
-    for relative in report_paths:
-        try:
-            delete_report_file(relative)
-        except OSError:
-            failed_unlinks.append(relative)
-    if failed_unlinks:
         logger.warning(
-            "Не удалось удалить файлы при удалении датасета %s: %s",
+            "Не удалось удалить файл датасета %s по пути %s",
             dataset_id,
-            failed_unlinks,
+            storage_path,
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

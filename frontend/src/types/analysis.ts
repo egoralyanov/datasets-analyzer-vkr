@@ -5,7 +5,11 @@ export type Severity = "info" | "warning" | "critical";
 
 export type Analysis = {
   id: string;
-  dataset_id: string;
+  // dataset_id может быть null, если исходный датасет был удалён
+  // (FK ON DELETE SET NULL). dataset_filename из снапшота продолжает
+  // быть доступным.
+  dataset_id: string | null;
+  dataset_filename: string | null;
   status: AnalysisStatus;
   target_column: string | null;
   started_at: string;
@@ -17,8 +21,10 @@ export type Analysis = {
 // Не путать с Analysis — там более полная модель для polling одного анализа.
 export type AnalysisListItem = {
   id: string;
-  dataset_id: string;
+  dataset_id: string | null;
   dataset_name: string;
+  // true если исходный датасет был удалён — фронт рисует пометку «(удалён)».
+  dataset_deleted: boolean;
   status: AnalysisStatus;
   target_column: string | null;
   recommended_task_type: string | null;

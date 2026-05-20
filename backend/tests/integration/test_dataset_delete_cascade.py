@@ -1,17 +1,15 @@
 """
-Интеграционные тесты для расширенного DELETE /api/datasets/{id}
-(Спринт 6, Phase 4.6).
+Интеграционные тесты для DELETE /api/datasets/{id}.
 
-Закрывают known limitation #5 из Sprint 4: при удалении датасета записи
-analyses / reports уходят через FK cascade, но PDF-файлы оставались
-осиротевшими на диске. Теперь они тоже удаляются.
+После правок 2026-05-20 удаление датасета НЕ уносит связанные анализы и
+PDF-отчёты. FK `analyses.dataset_id` теперь ON DELETE SET NULL; имя файла
+и размеры остаются в денормализованном снапшоте `analyses.dataset_filename`
+и т.п. Старое cascade-поведение отключено по запросу комиссии: пользователь
+хочет освободить место/убрать датасет из списка, но история анализов и
+сгенерированных отчётов должна сохраниться.
 
-Контракт DELETE /api/datasets/{id} не менялся (тот же 204, тот же скоуп
-по владельцу). Только внутренняя логика расширена: snapshot путей до
-delete + unlink после commit, OSError логируется WARNING без отката БД.
-
-Базовые сценарии delete (404, 401, успех с одним файлом датасета) уже
-покрыты в test_datasets_upload.py — здесь только новые ветки cascade.
+Контракт DELETE по-прежнему 204 и скоуп по владельцу. Меняется только
+семантика побочных эффектов.
 """
 from __future__ import annotations
 
@@ -63,6 +61,13 @@ def _make_analysis(
         user_id=user.id,
         target_column=None,
         status=status,
+        # Снапшот пишется обычно при создании анализа через API;
+        # здесь дублируем для реалистичности.
+        dataset_filename=dataset.original_filename,
+        dataset_format=dataset.format,
+        dataset_n_rows=dataset.n_rows,
+        dataset_n_cols=dataset.n_cols,
+        dataset_file_size_bytes=dataset.file_size_bytes,
     )
     db.add(analysis)
     db.commit()
@@ -90,13 +95,14 @@ def _make_report_with_file(
     return report, abs_path
 
 
-def test_delete_dataset_removes_associated_analyses(
+def test_delete_dataset_keeps_associated_analyses(
     client: TestClient,
     db_session: Session,
     test_user: Callable[..., dict[str, Any]],
     auth_headers: Callable[[Any], dict[str, str]],
 ) -> None:
-    """После DELETE дочерние анализы ушли (FK cascade). Тест фиксирует поведение."""
+    """Анализы остаются в БД после удаления датасета; dataset_id обнуляется,
+    снапшот dataset_filename продолжает быть осмысленным."""
     user = test_user()["user"]
     dataset, _ = _make_dataset_with_file(db_session, user)
     a1 = _make_analysis(db_session, user, dataset)
@@ -112,20 +118,23 @@ def test_delete_dataset_removes_associated_analyses(
     assert db_session.scalar(
         select(Dataset).where(Dataset.id == dataset_id)
     ) is None
-    assert db_session.scalar(select(Analysis).where(Analysis.id == a1_id)) is None
-    assert db_session.scalar(select(Analysis).where(Analysis.id == a2_id)) is None
+    for aid in (a1_id, a2_id):
+        a = db_session.scalar(select(Analysis).where(Analysis.id == aid))
+        assert a is not None
+        assert a.dataset_id is None
+        assert a.dataset_filename == "iris.csv"
 
 
-def test_delete_dataset_removes_associated_pdfs_from_disk(
+def test_delete_dataset_keeps_associated_pdfs_on_disk(
     client: TestClient,
     db_session: Session,
     test_user: Callable[..., dict[str, Any]],
     auth_headers: Callable[[Any], dict[str, str]],
 ) -> None:
     """
-    Главный тест ради которого затевалось 4.6: PDF success-отчёта всех
-    анализов датасета исчезает с диска после удаления датасета.
-    Также проверяет, что failed-отчёт без файла на диске не ломает поток.
+    Главный гарант нового поведения: PDF success-отчётов и их записи в БД
+    остаются доступными после удаления датасета. Только сам файл датасета
+    с диска удаляется.
     """
     user = test_user()["user"]
     dataset, dataset_path = _make_dataset_with_file(db_session, user)
@@ -134,19 +143,6 @@ def test_delete_dataset_removes_associated_pdfs_from_disk(
     _, pdf1_path = _make_report_with_file(db_session, user, a1)
     _, pdf2_path = _make_report_with_file(db_session, user, a2)
 
-    # failed-report — без физического файла, проверяем что он не ломает unlink-цикл.
-    failed_report = Report(
-        analysis_id=a2.id,
-        user_id=user.id,
-        status="failed",
-        file_path=None,
-        error="boom",
-    )
-    db_session.add(failed_report)
-    db_session.commit()
-
-    # Сохраняем id-шники до expire_all, иначе ORM при последующем доступе
-    # к атрибутам уже удалённых instances кидает ObjectDeletedError.
     dataset_id = dataset.id
     a1_id, a2_id = a1.id, a2.id
 
@@ -159,14 +155,19 @@ def test_delete_dataset_removes_associated_pdfs_from_disk(
     )
     assert response.status_code == 204
 
-    # Cascade и unlink сработали по обоим артефактам.
     db_session.expire_all()
-    assert db_session.scalar(
-        select(Report).where(Report.analysis_id.in_((a1_id, a2_id)))
-    ) is None
+    # Файл датасета снят с диска.
     assert not dataset_path.exists()
-    assert not pdf1_path.exists()
-    assert not pdf2_path.exists()
+    # PDF success-отчётов на диске сохранились.
+    assert pdf1_path.exists()
+    assert pdf2_path.exists()
+    # Записи Report тоже живы — на них теперь висят «осиротевшие» анализы.
+    reports = list(
+        db_session.scalars(
+            select(Report).where(Report.analysis_id.in_((a1_id, a2_id)))
+        )
+    )
+    assert len(reports) == 2
 
 
 def test_delete_dataset_with_no_analyses_succeeds(
@@ -175,7 +176,7 @@ def test_delete_dataset_with_no_analyses_succeeds(
     test_user: Callable[..., dict[str, Any]],
     auth_headers: Callable[[Any], dict[str, str]],
 ) -> None:
-    """Smoke: датасет без анализов удаляется как раньше — пустой report_paths не ломает поток."""
+    """Smoke: датасет без анализов удаляется штатно."""
     user = test_user()["user"]
     dataset, dataset_path = _make_dataset_with_file(db_session, user)
     dataset_id = dataset.id

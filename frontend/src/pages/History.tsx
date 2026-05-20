@@ -197,6 +197,11 @@ function AnalysisRow({
         <div className="min-w-0">
           <p className="truncate font-serif text-[1.0625rem] font-semibold leading-snug text-paper-900">
             {item.dataset_name}
+            {item.dataset_deleted && (
+              <span className="ml-2 font-sans text-[0.6875rem] font-medium uppercase tracking-wider text-paper-500">
+                (удалён)
+              </span>
+            )}
           </p>
           <p className="mt-1 font-mono text-xs text-paper-500">
             {startedAtFmt}

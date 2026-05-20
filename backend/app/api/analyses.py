@@ -111,6 +111,11 @@ def start_analysis(
         dataset_id=dataset.id,
         user_id=current_user.id,
         target_column=payload.target_column,
+        dataset_filename=dataset.original_filename,
+        dataset_format=dataset.format,
+        dataset_n_rows=dataset.n_rows,
+        dataset_n_cols=dataset.n_cols,
+        dataset_file_size_bytes=dataset.file_size_bytes,
     )
 
     # SessionLocal — фабрика, не активная сессия. BackgroundTask откроет
@@ -148,7 +153,13 @@ def list_my_analyses(
             AnalysisListItem(
                 id=a.id,
                 dataset_id=a.dataset_id,
-                dataset_name=a.dataset.original_filename if a.dataset else "—",
+                # Имя берём из снапшота анализа. Если датасет ещё жив, имя в
+                # снапшоте совпадает с актуальным. Если удалён — снапшот
+                # сохранил исходное имя на момент запуска анализа.
+                dataset_name=a.dataset_filename or "—",
+                # dataset_id обнуляется ON DELETE SET NULL — это и есть
+                # признак удалённого датасета. На фронте показываем «(удалён)».
+                dataset_deleted=a.dataset_id is None,
                 status=a.status,
                 target_column=a.target_column,
                 recommended_task_type=(

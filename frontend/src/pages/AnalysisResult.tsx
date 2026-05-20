@@ -68,10 +68,14 @@ export function AnalysisResult() {
     enabled: !!id && analysis?.status === "done",
   });
 
-  // Имя файла нужно для shapки страницы и sticky-bar.
+  // Имя файла для шапки страницы и sticky-bar берём из снапшота, который
+  // лежит прямо в Analysis (`dataset_filename`). Live Dataset подтягиваем
+  // ТОЛЬКО когда он ещё существует: если пользователь его удалил,
+  // dataset_id = null — запрос отключаем и не получаем лишнюю 404.
+  // Снапшот в analysis всё равно даст осмысленное имя.
   const dataset = useQuery({
     queryKey: ["dataset", analysis?.dataset_id],
-    queryFn: () => datasetsApi.get(analysis!.dataset_id),
+    queryFn: () => datasetsApi.get(analysis!.dataset_id!),
     enabled: !!analysis?.dataset_id,
   });
 
@@ -109,7 +113,11 @@ export function AnalysisResult() {
     );
   }
 
-  const filename = dataset.data?.original_filename ?? "Анализ";
+  const filename =
+    dataset.data?.original_filename ?? analysis.dataset_filename ?? "Анализ";
+  // Признак удаления — обнулённый FK, который бэк выставляет при удалении
+  // Dataset (ON DELETE SET NULL). dataset_filename продолжает быть валидным.
+  const datasetDeleted = analysis.dataset_id === null;
   const finishedAt = analysis.finished_at
     ? new Date(analysis.finished_at).toLocaleString("ru-RU")
     : null;
@@ -137,6 +145,7 @@ export function AnalysisResult() {
         </div>
         <PageHeader
           filename={filename}
+          datasetDeleted={datasetDeleted}
           status={analysis.status}
           target={analysis.target_column}
           finishedAt={finishedAt}
@@ -275,11 +284,13 @@ function Band({
 
 function PageHeader({
   filename,
+  datasetDeleted,
   status,
   target,
   finishedAt,
 }: {
   filename: string;
+  datasetDeleted: boolean;
   status: AnalysisStatus;
   target: string | null;
   finishedAt: string | null;
@@ -288,6 +299,14 @@ function PageHeader({
     <div className="mt-5">
       <h1 className="font-serif text-[2.25rem] font-bold leading-tight tracking-tight text-paper-900 sm:text-[2.5rem]">
         {filename}
+        {datasetDeleted && (
+          <span
+            className="ml-3 align-middle font-sans text-xs font-medium uppercase tracking-wider text-paper-500"
+            title="Исходный датасет был удалён. Результаты анализа сохранены."
+          >
+            (удалён)
+          </span>
+        )}
       </h1>
       <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1 font-sans text-xs uppercase tracking-wider">
         <MetaPair label="Статус" value={status.toUpperCase()} tone={statusTone(status)} mono />

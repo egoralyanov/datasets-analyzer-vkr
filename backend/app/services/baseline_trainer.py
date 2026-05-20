@@ -493,6 +493,10 @@ def train_baseline(
     if analysis is None:
         raise ValueError(f"Analysis {analysis_id} not found")
     dataset = analysis.dataset
+    if dataset is None:
+        raise ValueError(
+            f"Dataset for analysis {analysis_id} was deleted — cannot retrain baseline"
+        )
 
     df = read_dataset_full(Path(dataset.storage_path), dataset.format)
 

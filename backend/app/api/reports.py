@@ -157,8 +157,10 @@ def download_report(
 
     analysis = analysis_repo.get_analysis(db, report.analysis_id, current_user.id)
     dataset_stem = "report"
-    if analysis is not None and analysis.dataset is not None:
-        dataset_stem = Path(analysis.dataset.original_filename).stem or "report"
+    # Имя файла берём из снапшота анализа — оно остаётся доступным даже
+    # после удаления исходного датасета.
+    if analysis is not None and analysis.dataset_filename:
+        dataset_stem = Path(analysis.dataset_filename).stem or "report"
     date_str = report.created_at.strftime("%Y-%m-%d")
     pretty_name = f"report_{dataset_stem}_{date_str}.pdf"
     encoded_name = urllib.parse.quote(pretty_name, safe="")

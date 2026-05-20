@@ -62,6 +62,9 @@ class Dataset(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="datasets")
+    # passive_deletes=True: при db.delete(dataset) ORM не пытается явно удалить
+    # связанные Analysis, отдавая работу БД — а FK Analysis.dataset_id с
+    # ON DELETE SET NULL обнулит ссылку, оставив анализы и их отчёты живыми.
     analyses: Mapped[list["Analysis"]] = relationship(
-        back_populates="dataset", cascade="all, delete-orphan"
+        back_populates="dataset", passive_deletes=True
     )

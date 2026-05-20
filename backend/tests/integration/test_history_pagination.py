@@ -60,6 +60,14 @@ def _seed_analyses(
                 user_id=user_id,
                 target_column="species",
                 status=status,
+                # Снапшот метаданных датасета пишется при создании анализа
+                # через analysis_repo.create_analysis; здесь повторяем то же,
+                # чтобы dataset_name в ответе API совпадал с ожиданием.
+                dataset_filename=dataset.original_filename,
+                dataset_format=dataset.format,
+                dataset_n_rows=dataset.n_rows,
+                dataset_n_cols=dataset.n_cols,
+                dataset_file_size_bytes=dataset.file_size_bytes,
             )
             db.add(analysis)
             db.commit()
